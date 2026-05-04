@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     api_host: str = "0.0.0.0"
-    api_port: int = 8000
+    api_port: int = 8090
 
     embedding_model: str = "BAAI/bge-large-en-v1.5"
     embedding_device: str = "cpu"

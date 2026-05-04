@@ -1,0 +1,112 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dclaw-rag.fullname" . }}-backend
+  labels:
+    {{- include "dclaw-rag.labels" . | nindent 4 }}
+    component: backend
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "dclaw-rag.selectorLabels" . | nindent 6 }}
+      component: backend
+  template:
+    metadata:
+      labels:
+        {{- include "dclaw-rag.selectorLabels" . | nindent 8 }}
+        component: backend
+    spec:
+      containers:
+        - name: backend
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.backend.port }}
+              protocol: TCP
+          env:
+            {{- toYaml .Values.backend.env | nindent 12 }}
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.backend.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.backend.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "dclaw-rag.fullname" . }}-qdrant
+  labels:
+    {{- include "dclaw-rag.labels" . | nindent 4 }}
+    component: qdrant
+spec:
+  serviceName: {{ include "dclaw-rag.fullname" . }}-qdrant
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "dclaw-rag.selectorLabels" . | nindent 6 }}
+      component: qdrant
+  template:
+    metadata:
+      labels:
+        {{- include "dclaw-rag.selectorLabels" . | nindent 8 }}
+        component: qdrant
+    spec:
+      containers:
+        - name: qdrant
+          image: {{ .Values.qdrant.image }}
+          ports:
+            - containerPort: 6333
+              protocol: TCP
+            - containerPort: 6334
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.qdrant.resources | nindent 12 }}
+          volumeMounts:
+            - name: qdrant-storage
+              mountPath: /qdrant/storage
+  volumeClaimTemplates:
+    - metadata:
+        name: qdrant-storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.qdrant.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dclaw-rag.fullname" . }}-redis
+  labels:
+    {{- include "dclaw-rag.labels" . | nindent 4 }}
+    component: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "dclaw-rag.selectorLabels" . | nindent 6 }}
+      component: redis
+  template:
+    metadata:
+      labels:
+        {{- include "dclaw-rag.selectorLabels" . | nindent 8 }}
+        component: redis
+    spec:
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image }}
+          ports:
+            - containerPort: 6379
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.redis.resources | nindent 12 }}

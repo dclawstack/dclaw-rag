@@ -1,0 +1,14 @@
+{
+  "app_id": "rag",
+  "name": "DClaw RAG",
+  "version": "0.1.0",
+  "category": "platform",
+  "icon": "/icons/rag.svg",
+  "color": "#F59E0B",
+  "entrypoint": "/",
+  "api_base": "https://rag.dclawstack.io",
+  "permissions": ["read:collections", "write:collections", "read:documents", "write:documents", "read:queries"],
+  "requires_auth": true,
+  "billing_plan": "free",
+  "note": "Backend-only MVP — frontend scaffold needed"
+}
