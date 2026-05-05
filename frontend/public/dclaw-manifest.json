@@ -9,6 +9,5 @@
   "api_base": "https://rag.dclawstack.io",
   "permissions": ["read:collections", "write:collections", "read:documents", "write:documents", "read:queries"],
   "requires_auth": true,
-  "billing_plan": "free",
-  "note": "Backend-only MVP — frontend scaffold needed"
+  "billing_plan": "free"
 }
