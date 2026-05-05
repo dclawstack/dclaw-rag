@@ -69,7 +69,7 @@ export default function CollectionsPage() {
     if (!newName.trim()) return;
     setCreating(true);
     try {
-      const created = await createCollection(newName.trim(), newDesc.trim() || undefined);
+      const created = await createCollection({ name: newName.trim(), description: newDesc.trim() || undefined });
       setCollections((prev) => [...prev, created]);
       toast.success("Collection created", { description: created.name });
       setNewName("");
