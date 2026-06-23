@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { queryRag, QueryResponse } from "@/lib/api";
+import { useState, useEffect } from "react";
+import { queryRag, QueryResponse, listCollections, Collection } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +19,14 @@ export default function QueryPage() {
   const [topK, setTopK] = useState(10);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<QueryResponse | null>(null);
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [collectionId, setCollectionId] = useState("");
+
+  useEffect(() => {
+    listCollections()
+      .then(setCollections)
+      .catch(() => setCollections([]));
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,7 +34,11 @@ export default function QueryPage() {
     setLoading(true);
     setResult(null);
     try {
-      const res = await queryRag({ question, top_k: topK });
+      const res = await queryRag({
+        question,
+        top_k: topK,
+        collection_id: collectionId || undefined,
+      });
       setResult(res);
       toast.success("Query completed", {
         description: `Retrieved ${res.retrieved_chunks.length} chunks with ${res.confidence} confidence`,
@@ -77,6 +89,24 @@ export default function QueryPage() {
             </div>
 
             <div className="flex items-center gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="query-collection" className="text-xs">
+                  Collection
+                </Label>
+                <select
+                  id="query-collection"
+                  value={collectionId}
+                  onChange={(e) => setCollectionId(e.target.value)}
+                  className="flex h-8 rounded-md border border-input bg-transparent px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="">All collections</option>
+                  {collections.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="space-y-1">
                 <Label htmlFor="topk" className="text-xs">
                   Top-K: {topK}

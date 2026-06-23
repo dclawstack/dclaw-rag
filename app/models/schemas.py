@@ -15,6 +15,7 @@ class ChunkMetadata(BaseModel):
     tags: list[str] = Field(default_factory=list)
     checksum: str | None = None
     tenant_id: str | None = None
+    collection_id: str | None = None
 
 
 class DocumentChunk(BaseModel):
@@ -30,6 +31,7 @@ class IngestRequest(BaseModel):
     title: str | None = None
     tags: list[str] = Field(default_factory=list)
     tenant_id: str | None = None
+    collection_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -48,6 +50,7 @@ class QueryRequest(BaseModel):
     question: str
     top_k: int = 10
     tenant_id: str | None = None
+    collection_id: str | None = None
     rewrite_query: bool = False
     filters: dict[str, Any] = Field(default_factory=dict)
 
@@ -77,6 +80,30 @@ class QueryResponse(BaseModel):
     citations: list[Citation]
     confidence: str = "medium"
     latency_ms: float
+
+
+class CollectionCreate(BaseModel):
+    name: str
+    description: str | None = None
+    tags: list[str] = Field(default_factory=list)
+
+
+class Collection(BaseModel):
+    id: str
+    name: str
+    description: str | None = None
+    document_count: int = 0
+    chunk_count: int = 0
+    status: str = "ready"
+    tags: list[str] = Field(default_factory=list)
+    created_at: str
+
+
+class Document(BaseModel):
+    id: str
+    filename: str
+    status: str = "ready"
+    created_at: str = ""
 
 
 class HealthResponse(BaseModel):

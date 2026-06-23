@@ -66,6 +66,7 @@ export async function healthCheck(): Promise<{ status: string; version?: string 
 export async function queryRag(params: {
   question: string;
   top_k: number;
+  collection_id?: string;
 }): Promise<QueryResponse> {
   return apiFetch(`/api/v1/rag/query`, {
     method: "POST",

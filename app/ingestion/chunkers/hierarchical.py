@@ -41,6 +41,7 @@ def hierarchical_chunk(
                 tags=metadata.tags,
                 checksum=metadata.checksum,
                 tenant_id=metadata.tenant_id,
+                collection_id=metadata.collection_id,
             ),
         )
         chunks.append(chunk)

@@ -32,6 +32,8 @@ async def query(
     filters = request.filters.copy()
     if request.tenant_id:
         filters["tenant_id"] = request.tenant_id
+    if request.collection_id:
+        filters["collection_id"] = request.collection_id
 
     chunks = searcher.search(request.question, top_k=request.top_k, filters=filters or None)
 

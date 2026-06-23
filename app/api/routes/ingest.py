@@ -28,6 +28,7 @@ def _build_request(metadata: dict, default_title: str | None = None) -> IngestRe
         title=metadata.get("title") or default_title,
         tags=metadata.get("tags") or [],
         tenant_id=metadata.get("tenant_id"),
+        collection_id=metadata.get("collection_id"),
     )
 
 
