@@ -15,7 +15,7 @@ class IngestionPipeline:
         self.store = QdrantStore()
         self.embedder = Embedder()
 
-    def ingest_file(self, file_path: Path, request: IngestRequest) -> UUID:
+    def ingest_file(self, file_path: Path, request: IngestRequest) -> tuple[UUID, int]:
         extractor = get_extractor(file_path)
         raw_text = extractor.extract(file_path)
 
@@ -38,9 +38,9 @@ class IngestionPipeline:
         chunks = self.embedder.embed_chunks(chunks)
         self.store.upsert_chunks(chunks)
 
-        return doc_id
+        return doc_id, len(chunks)
 
-    def ingest_text(self, text: str, request: IngestRequest) -> UUID:
+    def ingest_text(self, text: str, request: IngestRequest) -> tuple[UUID, int]:
         doc_id = uuid4()
         metadata = ChunkMetadata(
             doc_id=doc_id,
@@ -57,4 +57,4 @@ class IngestionPipeline:
         chunks = self.embedder.embed_chunks(chunks)
         self.store.upsert_chunks(chunks)
 
-        return doc_id
+        return doc_id, len(chunks)

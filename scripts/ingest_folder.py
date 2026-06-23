@@ -20,8 +20,8 @@ async def main(folder: Path, source_prefix: str, tenant_id: str | None) -> None:
                 tenant_id=tenant_id,
             )
             try:
-                doc_id = pipeline.ingest_file(file_path, request)
-                print(f"Ingested {file_path.name} → {doc_id}")
+                doc_id, n_chunks = pipeline.ingest_file(file_path, request)
+                print(f"Ingested {file_path.name} → {doc_id} ({n_chunks} chunks)")
             except Exception as exc:
                 print(f"Failed {file_path.name}: {exc}")
 

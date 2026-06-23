@@ -19,21 +19,6 @@ on:
 jobs:
   backend-tests:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: dclaw_app_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -42,12 +27,8 @@ jobs:
       - name: Install uv
         run: pip install uv
       - name: Install dependencies
-        working-directory: ./backend
-        run: uv pip install --system -r requirements.txt
+        run: uv pip install --system -e ".[dev]"
       - name: Run tests
-        working-directory: ./backend
-        env:
-          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/dclaw_app_test
         run: python -m pytest -v --tb=short
 
   frontend-build:
@@ -63,6 +44,6 @@ jobs:
       - name: Build
         working-directory: ./frontend
         env:
-          NEXT_PUBLIC_API_URL: http://localhost:8000
+          NEXT_PUBLIC_API_URL: http://localhost:8090
         run: npm run build
         timeout-minutes: 5

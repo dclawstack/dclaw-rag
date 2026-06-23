@@ -21,6 +21,7 @@ class DocumentChunk(BaseModel):
     id: UUID
     text: str
     embedding: list[float] | None = None
+    score: float | None = None
     metadata: ChunkMetadata
 
 
@@ -38,6 +39,11 @@ class IngestResponse(BaseModel):
     status: str
 
 
+class TextIngestRequest(BaseModel):
+    text: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class QueryRequest(BaseModel):
     question: str
     top_k: int = 10
@@ -48,22 +54,29 @@ class QueryRequest(BaseModel):
 
 class RetrievedChunk(BaseModel):
     id: UUID
+    chunk_id: str
     text: str
     score: float
+    document_name: str
     metadata: ChunkMetadata
 
 
 class Citation(BaseModel):
     index: int
-    chunk_id: UUID
+    chunk_id: str
+    text: str
     source: str
+    page: int | None = None
 
 
 class QueryResponse(BaseModel):
+    query: str
     answer: str
+    results: list[RetrievedChunk]
+    retrieved_chunks: list[RetrievedChunk]
     citations: list[Citation]
     confidence: str = "medium"
-    retrieved_chunks: list[RetrievedChunk]
+    latency_ms: float
 
 
 class HealthResponse(BaseModel):
