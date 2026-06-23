@@ -94,6 +94,42 @@ class QdrantStore:
             )
         return rest.Filter(must=conditions)
 
+    def count_points(self, filters: dict | None = None) -> int:
+        result = self.client.count(
+            collection_name=self.collection,
+            count_filter=self._build_filter(filters),
+            exact=True,
+        )
+        return result.count
+
+    def list_documents(self, filters: dict | None = None, limit: int = 1000) -> list[dict]:
+        """Return distinct documents (deduped by doc_id) matching the filter."""
+        qdrant_filter = self._build_filter(filters)
+        docs: dict[str, dict] = {}
+        offset = None
+        while len(docs) < limit:
+            points, offset = self.client.scroll(
+                collection_name=self.collection,
+                scroll_filter=qdrant_filter,
+                with_payload=True,
+                with_vectors=False,
+                limit=256,
+                offset=offset,
+            )
+            for point in points:
+                meta = (point.payload or {}).get("metadata", {})
+                doc_id = meta.get("doc_id")
+                if doc_id and doc_id not in docs:
+                    docs[doc_id] = {
+                        "id": doc_id,
+                        "filename": meta.get("title") or meta.get("source") or doc_id,
+                        "status": "ready",
+                        "created_at": meta.get("created_at") or "",
+                    }
+            if offset is None:
+                break
+        return list(docs.values())
+
     def delete_by_doc_id(self, doc_id: UUID) -> None:
         self.client.delete(
             collection_name=self.collection,

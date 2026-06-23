@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { ingestFile, ingestText } from "@/lib/api";
+import { useState, useCallback, useEffect } from "react";
+import { ingestFile, ingestText, listCollections, Collection } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +22,14 @@ export default function IngestPage() {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [dragOver, setDragOver] = useState(false);
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [collectionId, setCollectionId] = useState("");
+
+  useEffect(() => {
+    listCollections()
+      .then(setCollections)
+      .catch(() => setCollections([]));
+  }, []);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -53,6 +61,7 @@ export default function IngestPage() {
         source,
         title: title || file.name,
         tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+        collection_id: collectionId || undefined,
       });
       setProgress(100);
       toast.success("File ingested", {
@@ -80,6 +89,7 @@ export default function IngestPage() {
         source,
         title: title || "Text ingestion",
         tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+        collection_id: collectionId || undefined,
       });
       setProgress(100);
       toast.success("Text ingested", {
@@ -173,6 +183,22 @@ export default function IngestPage() {
 
               <div className="grid gap-3">
                 <div className="space-y-1">
+                  <Label htmlFor="file-collection">Collection</Label>
+                  <select
+                    id="file-collection"
+                    value={collectionId}
+                    onChange={(e) => setCollectionId(e.target.value)}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    <option value="">No collection</option>
+                    {collections.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
                   <Label htmlFor="file-source">Source</Label>
                   <Input
                     id="file-source"
@@ -230,6 +256,22 @@ export default function IngestPage() {
               </div>
 
               <div className="grid gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="text-collection">Collection</Label>
+                  <select
+                    id="text-collection"
+                    value={collectionId}
+                    onChange={(e) => setCollectionId(e.target.value)}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    <option value="">No collection</option>
+                    {collections.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="space-y-1">
                   <Label htmlFor="text-source">Source</Label>
                   <Input

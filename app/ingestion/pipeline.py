@@ -32,6 +32,7 @@ class IngestionPipeline:
             tags=request.tags,
             checksum=None,
             tenant_id=request.tenant_id,
+            collection_id=request.collection_id,
         )
 
         chunks = hierarchical_chunk(raw_text, doc_id=doc_id, metadata=metadata)
@@ -51,6 +52,7 @@ class IngestionPipeline:
             tags=request.tags,
             checksum=None,
             tenant_id=request.tenant_id,
+            collection_id=request.collection_id,
         )
 
         chunks = hierarchical_chunk(text, doc_id=doc_id, metadata=metadata)

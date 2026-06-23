@@ -1,5 +1,6 @@
 from fastapi import Request
 
+from app.db.collection_store import CollectionStore
 from app.db.qdrant_store import QdrantStore
 from app.generation.llm_gateway import LLMGateway, get_llm_gateway
 from app.ingestion.pipeline import IngestionPipeline
@@ -28,3 +29,9 @@ async def get_store(request: Request) -> QdrantStore:
     if not hasattr(request.app.state, "store"):
         request.app.state.store = QdrantStore()
     return request.app.state.store
+
+
+async def get_collection_store(request: Request) -> CollectionStore:
+    if not hasattr(request.app.state, "collection_store"):
+        request.app.state.collection_store = CollectionStore()
+    return request.app.state.collection_store
