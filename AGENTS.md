@@ -10,7 +10,7 @@
 - **Backend Port:** `8004` (FastAPI)
 - **Frontend Port:** `3004` (Next.js)
 - **Database:** `dclaw_rag` (PostgreSQL)
-- **Base API Path:** `/api/v1`
+- **Base API Path:** `/api/v1/rag`
 
 ## Architecture Lock — DO NOT CHANGE
 
