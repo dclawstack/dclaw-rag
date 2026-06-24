@@ -26,6 +26,10 @@ jobs:
           python-version: "3.11"
       - name: Install uv
         run: pip install uv
+      - name: Install CPU-only torch
+        # Avoids ~5GB of CUDA wheels; the app runs on CPU. Must precede the
+        # editable install so torch is already satisfied.
+        run: uv pip install --system torch torchvision --index-url https://download.pytorch.org/whl/cpu
       - name: Install dependencies
         run: uv pip install --system -e ".[dev]"
       - name: Run tests
