@@ -74,6 +74,33 @@ export async function queryRag(params: {
   });
 }
 
+export interface AgentStep {
+  sub_question: string;
+  n_results: number;
+}
+
+export interface AgentResponse {
+  query: string;
+  answer: string;
+  citations: QueryResponse["citations"];
+  retrieved_chunks: QueryResponse["retrieved_chunks"];
+  confidence: "high" | "medium" | "low";
+  steps: AgentStep[];
+  latency_ms: number;
+}
+
+export async function agentQuery(params: {
+  question: string;
+  top_k: number;
+  collection_id?: string;
+  max_steps?: number;
+}): Promise<AgentResponse> {
+  return apiFetch(`/api/v1/rag/agent`, {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
 export async function ingestFile(
   file: File,
   metadata?: Record<string, any>
