@@ -17,7 +17,8 @@
       "pages": [
         "guides/index",
         "guides/use-cases",
-        "guides/best-practices"
+        "guides/best-practices",
+        "guides/manual-testing"
       ]
     },
     {
