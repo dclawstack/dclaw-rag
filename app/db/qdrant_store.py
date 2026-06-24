@@ -21,10 +21,13 @@ class QdrantStore:
         if not self.client.collection_exists(self.collection):
             self.client.create_collection(
                 collection_name=self.collection,
-                vectors_config=rest.VectorParams(
-                    size=1024,
-                    distance=rest.Distance.COSINE,
-                ),
+                vectors_config={
+                    "dense": rest.VectorParams(
+                        size=1024,
+                        distance=rest.Distance.COSINE,
+                    )
+                },
+                sparse_vectors_config={"sparse": rest.SparseVectorParams()},
             )
 
     def upsert_chunks(self, chunks: list[DocumentChunk]) -> None:
@@ -34,7 +37,7 @@ class QdrantStore:
         points = [
             rest.PointStruct(
                 id=str(chunk.id),
-                vector=chunk.embedding or [],
+                vector=self._build_vectors(chunk),
                 payload={
                     "text": chunk.text,
                     "metadata": chunk.metadata.model_dump(mode="json"),
@@ -48,36 +51,67 @@ class QdrantStore:
         except Exception as exc:
             raise RetrievalError(f"Qdrant upsert failed: {exc}") from exc
 
-    def search(
+    def _build_vectors(self, chunk: DocumentChunk) -> dict:
+        vectors: dict = {"dense": chunk.embedding or []}
+        if chunk.sparse_embedding:
+            vectors["sparse"] = rest.SparseVector(
+                indices=chunk.sparse_embedding["indices"],
+                values=chunk.sparse_embedding["values"],
+            )
+        return vectors
+
+    def search_dense(
         self,
         query_vector: list[float],
         top_k: int = 10,
         filters: dict | None = None,
     ) -> list[DocumentChunk]:
+        return self._query(query_vector, "dense", top_k, filters)
+
+    def search_sparse(
+        self,
+        indices: list[int],
+        values: list[float],
+        top_k: int = 10,
+        filters: dict | None = None,
+    ) -> list[DocumentChunk]:
+        sparse = rest.SparseVector(indices=indices, values=values)
+        return self._query(sparse, "sparse", top_k, filters)
+
+    def _query(
+        self,
+        query: object,
+        using: str,
+        top_k: int,
+        filters: dict | None,
+    ) -> list[DocumentChunk]:
         try:
-            qdrant_filter = self._build_filter(filters)
-            results = self.client.search(
+            response = self.client.query_points(
                 collection_name=self.collection,
-                query_vector=query_vector,
+                query=query,
+                using=using,
                 limit=top_k,
-                query_filter=qdrant_filter,
+                query_filter=self._build_filter(filters),
                 with_payload=True,
             )
         except Exception as exc:
-            raise RetrievalError(f"Qdrant search failed: {exc}") from exc
+            raise RetrievalError(f"Qdrant {using} search failed: {exc}") from exc
 
+        return self._to_chunks(response.points)
+
+    def _to_chunks(self, points: list) -> list[DocumentChunk]:
         chunks: list[DocumentChunk] = []
-        for point in results:
+        for point in points:
             payload = point.payload or {}
             meta = payload.get("metadata", {})
-            chunks.append(
-                DocumentChunk(
-                    id=UUID(point.id),
-                    text=payload.get("text", ""),
-                    embedding=None,
-                    metadata=ChunkMetadata(**meta),
-                )
+            chunk = DocumentChunk(
+                id=UUID(str(point.id)),
+                text=payload.get("text", ""),
+                embedding=None,
+                metadata=ChunkMetadata(**meta),
             )
+            chunk.score = getattr(point, "score", None)
+            chunks.append(chunk)
         return chunks
 
     def _build_filter(self, filters: dict | None) -> rest.Filter | None:

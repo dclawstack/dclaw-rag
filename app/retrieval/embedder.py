@@ -31,3 +31,26 @@ class Embedder:
         for chunk, emb in zip(chunks, embeddings):
             chunk.embedding = emb
         return chunks
+
+
+class SparseEmbedder:
+    """BM25/sparse embeddings via fastembed for lexical (keyword) retrieval."""
+
+    def __init__(self) -> None:
+        # Lazy import to avoid loading at import time
+        from fastembed import SparseTextEmbedding
+
+        self.model = SparseTextEmbedding(model_name=settings.sparse_model)
+
+    def embed_query(self, text: str) -> dict[str, list]:
+        emb = next(iter(self.model.query_embed(text)))
+        return {"indices": emb.indices.tolist(), "values": emb.values.tolist()}
+
+    def embed_chunks(self, chunks: list[DocumentChunk]) -> list[DocumentChunk]:
+        texts = [c.text for c in chunks]
+        for chunk, emb in zip(chunks, self.model.embed(texts)):
+            chunk.sparse_embedding = {
+                "indices": emb.indices.tolist(),
+                "values": emb.values.tolist(),
+            }
+        return chunks

@@ -22,6 +22,7 @@ class DocumentChunk(BaseModel):
     id: UUID
     text: str
     embedding: list[float] | None = None
+    sparse_embedding: dict[str, Any] | None = None
     score: float | None = None
     metadata: ChunkMetadata
 

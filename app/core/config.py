@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     anthropic_api_key: str | None = None
 
+    sparse_model: str = "Qdrant/bm25"
+    hybrid_candidate_k: int = 100
+    rrf_k: int = 60
+
     reranker_model: str = "BAAI/bge-reranker-base"
     reranker_top_k: int = 10
 
