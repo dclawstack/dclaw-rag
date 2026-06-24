@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { queryRag, QueryResponse, listCollections, Collection } from "@/lib/api";
+import {
+  queryRag,
+  agentQuery,
+  QueryResponse,
+  AgentResponse,
+  AgentStep,
+  listCollections,
+  Collection,
+} from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,13 +20,15 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Search, Send, Quote, BookOpen, ChevronRight, Sparkles } from "lucide-react";
+import { Search, Send, Quote, BookOpen, ChevronRight, Sparkles, ListTree } from "lucide-react";
 
 export default function QueryPage() {
   const [question, setQuestion] = useState("");
   const [topK, setTopK] = useState(10);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<QueryResponse | null>(null);
+  const [result, setResult] = useState<QueryResponse | AgentResponse | null>(null);
+  const [steps, setSteps] = useState<AgentStep[]>([]);
+  const [agentic, setAgentic] = useState(false);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [collectionId, setCollectionId] = useState("");
 
@@ -33,16 +43,30 @@ export default function QueryPage() {
     if (!question.trim()) return;
     setLoading(true);
     setResult(null);
+    setSteps([]);
     try {
-      const res = await queryRag({
-        question,
-        top_k: topK,
-        collection_id: collectionId || undefined,
-      });
-      setResult(res);
-      toast.success("Query completed", {
-        description: `Retrieved ${res.retrieved_chunks.length} chunks with ${res.confidence} confidence`,
-      });
+      if (agentic) {
+        const res = await agentQuery({
+          question,
+          top_k: topK,
+          collection_id: collectionId || undefined,
+        });
+        setResult(res);
+        setSteps(res.steps);
+        toast.success("Agentic query completed", {
+          description: `${res.steps.length} reasoning steps · ${res.confidence} confidence`,
+        });
+      } else {
+        const res = await queryRag({
+          question,
+          top_k: topK,
+          collection_id: collectionId || undefined,
+        });
+        setResult(res);
+        toast.success("Query completed", {
+          description: `Retrieved ${res.retrieved_chunks.length} chunks with ${res.confidence} confidence`,
+        });
+      }
     } catch (err) {
       toast.error("Query failed", {
         description: err instanceof Error ? err.message : "Unknown error",
@@ -121,9 +145,15 @@ export default function QueryPage() {
                   className="w-32 accent-primary"
                 />
               </div>
-              <p className="text-xs text-muted-foreground ml-auto">
-                Number of chunks to retrieve
-              </p>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer ml-auto">
+                <input
+                  type="checkbox"
+                  checked={agentic}
+                  onChange={(e) => setAgentic(e.target.checked)}
+                  className="accent-primary"
+                />
+                Agentic (multi-step)
+              </label>
             </div>
           </form>
         </CardContent>
@@ -166,6 +196,30 @@ export default function QueryPage() {
               <p className="whitespace-pre-wrap leading-relaxed">{result.answer}</p>
             </CardContent>
           </Card>
+
+          {steps.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <ListTree className="w-4 h-4 text-primary" />
+                  Reasoning chain ({steps.length} {steps.length === 1 ? "step" : "steps"})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {steps.map((step, idx) => (
+                  <div key={idx} className="flex items-start gap-2 text-sm">
+                    <Badge variant="outline" className="shrink-0 mt-0.5">
+                      {idx + 1}
+                    </Badge>
+                    <span className="flex-1">{step.sub_question}</span>
+                    <Badge variant="secondary" className="shrink-0">
+                      {step.n_results} hits
+                    </Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           <Tabs defaultValue="citations" className="w-full">
             <TabsList>

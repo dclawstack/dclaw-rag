@@ -83,6 +83,30 @@ class QueryResponse(BaseModel):
     latency_ms: float
 
 
+class AgentRequest(BaseModel):
+    question: str
+    top_k: int = 5
+    max_steps: int = 4
+    tenant_id: str | None = None
+    collection_id: str | None = None
+    filters: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentStep(BaseModel):
+    sub_question: str
+    n_results: int
+
+
+class AgentResponse(BaseModel):
+    query: str
+    answer: str
+    citations: list[Citation]
+    retrieved_chunks: list[RetrievedChunk]
+    confidence: str = "medium"
+    steps: list[AgentStep]
+    latency_ms: float
+
+
 class CollectionCreate(BaseModel):
     name: str
     description: str | None = None
