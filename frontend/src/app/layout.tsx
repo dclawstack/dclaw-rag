@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { APP_NAME, APP_TAGLINE } from "@/lib/tokens";
 import { Sidebar } from "@/components/sidebar";
 import { Navbar } from "@/components/navbar";
+import { Copilot } from "@/components/copilot";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -39,6 +40,7 @@ export default function RootLayout({
             {children}
           </main>
         </div>
+        <Copilot />
         <Toaster position="top-right" />
       </body>
     </html>
