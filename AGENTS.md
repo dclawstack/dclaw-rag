@@ -1,184 +1,134 @@
-# DClaw App — Agent Development Guide
+# DClaw RAG — Agent Development Guide
 
 > **Read this file first before making any code changes.**
-> This document is the source of truth for architecture, anti-patterns, and development workflow.
+> Source of truth for this app's architecture, conventions, and workflow.
+> Broad rules live here; concrete details live next to the code.
 
 ## App Identity
 
-**DClaw RAG** is a vertical SaaS application built on the DClaw Stack.
+**DClaw RAG** — a retrieval-augmented generation service: ingest documents, then ask
+questions and get cited, LLM-synthesized answers.
 
-- **Backend Port:** `8004` (FastAPI)
-- **Frontend Port:** `3004` (Next.js)
-- **Database:** `dclaw_rag` (PostgreSQL)
-- **Base API Path:** `/api/v1/rag`
+- **Backend:** FastAPI, port `8090`
+- **Frontend:** Next.js (App Router), port `3003`
+- **Base API path:** `/api/v1/rag` (health probe is at `/health`)
+- **Vector store:** Qdrant · **Cache + collection metadata:** Redis
 
-## Architecture Lock — DO NOT CHANGE
+> ⚠️ This app does **NOT** use PostgreSQL, SQLAlchemy, Alembic, or a repository layer.
+> State lives in Qdrant (vectors) and Redis (collection records). Do not reintroduce a
+> relational-DB/ORM layer unless the architecture genuinely changes.
 
-These are non-negotiable. If an agent suggests changing them, reject it.
+## Architecture
 
-### Backend
-- **FastAPI** with `lifespan` handler
-- **SQLAlchemy 2.0** — `DeclarativeBase` from `app.models.base`, NOT `declarative_base()`. Do NOT use `MappedAsDataclass`.
-- **Pydantic v2** schemas with `ConfigDict(from_attributes=True)`
-- **Async SQLAlchemy** — `create_async_engine` + `AsyncSession`
-- **Repository pattern** — all DB access through `app/repositories/`
-- **Dependency injection** — `Depends(get_db)`, never manual `AsyncSession`
-- **NO MOCK DATA** — never use in-memory `dict`s
-- **pytest-asyncio==0.24.0** — pinned version, do not upgrade
+### Backend (`app/`, at the repo root — not `backend/`)
+- **FastAPI** + **Pydantic v2** schemas (`app/models/schemas.py`).
+- **Dependency injection** via `Depends(...)` (`app/api/dependencies.py`); heavy clients
+  (Qdrant, embedders, LLM, collection store) are lazily created and cached on `app.state`.
+- **Retrieval is hybrid:** dense (bge-large via sentence-transformers) **+** sparse/BM25
+  (fastembed `Qdrant/bm25`), fused with **Reciprocal Rank Fusion**, then re-ranked with a
+  cross-encoder. See `app/retrieval/`.
+- **Qdrant** uses **named vectors**: `dense` (1024-d cosine) + `sparse`. See
+  `app/db/qdrant_store.py`.
+- **Collections** are lightweight metadata records persisted in **Redis**
+  (`app/db/collection_store.py`); documents are associated via `metadata.collection_id`.
+- **Ingestion pipeline** (`app/ingestion/`): extractor → hierarchical chunker → dense +
+  sparse embeddings → Qdrant upsert. Supported formats live in
+  `app/ingestion/extractors/` + the `loaders` registry (PDF, DOCX, HTML, CSV/TSV,
+  Markdown, plaintext).
+- **Generation** (`app/generation/`): `LLMGateway` (OpenAI / Anthropic) + Jinja prompt.
+- **Logging:** `structlog` (`app/core/logging.py`) — no `print()`.
 
-### Frontend
-- **Next.js 14+ App Router**
-- **Tailwind CSS** + **custom UI components** (pre-built in `src/components/ui/`)
-- **API client** in `src/lib/api.ts` — typed fetch wrapper
-- **Environment variables** — `NEXT_PUBLIC_API_URL` baked at build time. Dockerfile MUST declare `ARG NEXT_PUBLIC_API_URL`.
-- **DO NOT install shadcn CLI** — use the pre-built components in `src/components/ui/`
-
-### Docker
-- **Backend:** `python:3.11-slim`, non-root `appuser`, healthcheck with `python urllib.request.urlopen()`
-- **Frontend:** `node:20-alpine`, port `3004`
-- **Compose:** container port MUST match `EXPOSE`/`ENV PORT`
+### Frontend (`frontend/`)
+- **Next.js 14+ App Router**, **Tailwind**, pre-built UI components in
+  `src/components/ui/` (use them; the project uses `@base-ui/react` primitives).
+- **API client** in `src/lib/api.ts` — a typed fetch wrapper. It is the contract with the
+  backend; keep paths/shapes in sync with the FastAPI routes.
+- **`NEXT_PUBLIC_API_URL`** is baked at build time; the frontend Dockerfile MUST declare
+  `ARG NEXT_PUBLIC_API_URL` before `npm run build`.
+- A floating **Copilot** (`src/components/copilot.tsx`) is mounted in the root layout and
+  appears on every route.
 
 ## Directory Structure
 
 ```
-RAG/
-├── backend/
-│   ├── app/
-│   │   ├── api/
-│   │   │   ├── main.py
-│   │   │   ├── routes/health.py
-│   │   │   └── v1/               # App-specific routers
-│   │   ├── core/
-│   │   │   ├── config.py
-│   │   │   └── database.py       # Base(DeclarativeBase), engine, get_db
-│   │   ├── models/
-│   │   │   ├── base.py
-│   │   │   └── ...               # App-specific models
-│   │   ├── repositories/         # CRUD layer
-│   │   ├── schemas/              # Pydantic v2
-│   │   └── services/             # Business logic / AI
-│   ├── alembic/
-│   ├── tests/
-│   │   ├── conftest.py           # Test DB override, client fixture
-│   │   └── __init__.py           # REQUIRED for pytest discovery
-│   └── Dockerfile
-├── frontend/
-│   ├── src/
-│   │   ├── app/                  # Next.js App Router
-│   │   ├── components/ui/        # Pre-built UI components (see below)
-│   │   │   ├── button.tsx
-│   │   │   ├── card.tsx
-│   │   │   ├── input.tsx
-│   │   │   ├── label.tsx
-│   │   │   ├── badge.tsx
-│   │   │   ├── select.tsx
-│   │   │   ├── dialog.tsx
-│   │   │   ├── table.tsx
-│   │   │   ├── tabs.tsx
-│   │   │   └── avatar.tsx
-│   │   └── lib/
-│   │       ├── api.ts
-│   │       └── utils.ts          # cn() helper
-│   └── Dockerfile
-├── docker-compose.yml
-├── .github/workflows/ci.yml      # DO NOT DELETE
-├── helm/
-└── .env.example
+dclaw-rag/
+├── app/                          # FastAPI backend (import root: `app.`)
+│   ├── api/
+│   │   ├── main.py               # app + router mounts
+│   │   ├── dependencies.py       # Depends(...) providers
+│   │   └── routes/               # health, query, ingest, collections
+│   ├── core/                     # config (pydantic-settings), logging, exceptions
+│   ├── db/                       # qdrant_store, collection_store (Redis), cache
+│   ├── generation/               # LLM gateway, prompts, output models
+│   ├── ingestion/                # pipeline, chunkers, extractors, loaders
+│   ├── models/schemas.py         # Pydantic v2 request/response models
+│   └── retrieval/                # embedder (dense+sparse), reranker, search (RRF)
+├── frontend/                     # Next.js app (see its own conventions above)
+├── tests/                        # pytest (unit/ + integration/)
+├── scripts/                      # ingest_folder, evaluate_retrieval
+├── helm/                         # K8s manifests
+├── infra/docker-compose.yml      # full dev stack (api + qdrant + redis)
+├── docker-compose.yml            # app + qdrant + redis
+├── Dockerfile                    # backend image
+├── pyproject.toml                # deps + ruff/mypy/pytest config
+└── .env.example                  # all settings (mirror of app/core/config.py)
 ```
 
-## Pre-Built UI Components
+## Conventions
 
-The scaffold includes working UI components in `frontend/src/components/ui/`. **Use these directly.** Do NOT install shadcn CLI or `@base-ui/react`.
+### Python
+- `ruff` (config in `pyproject.toml`) and type hints on public APIs.
+- Pydantic v2 for all schemas; SQLAlchemy is **not** used.
+- `pytest` + `pytest-asyncio` (`asyncio_mode = auto`).
+- Functions < 50 lines; `structlog`, never `print()`.
 
-**Required dependency:** `tailwindcss-animate` must be in `package.json` dependencies (not devDependencies) because `tailwind.config.ts` imports it via `plugins: [require("tailwindcss-animate")]`.
+### TypeScript / Next.js
+- Strict TypeScript; Tailwind for styling; `cn()` for conditional classes.
+- Do NOT install the shadcn CLI — use the pre-built components in `src/components/ui/`.
 
-Available components:
-- `Button` — variants: default, destructive, outline, secondary, ghost, link
-- `Card` — Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter
-- `Input` — standard text input
-- `Label` — form label
-- `Badge` — variants: default, secondary, destructive, outline
-- `Select` — native select with onValueChange support
-- `Dialog` — modal with trigger, content, header, title
-- `Table` — Table, TableHeader, TableBody, TableRow, TableHead, TableCell
-- `Tabs` — Tabs, TabsList, TabsTrigger, TabsContent
-- `Avatar` — Avatar, AvatarImage, AvatarFallback
-
-## Anti-Patterns — NEVER DO
-
-| Anti-Pattern | Why It Breaks Things | Correct Alternative |
-|--------------|---------------------|---------------------|
-| `declarative_base()` in `database.py` | Separate metadata → zero tables | `from app.models.base import Base` |
-| `curl` in healthcheck on `python:*-slim` | No `curl` → silent failure | `python -c "import urllib.request; urllib.request.urlopen(...)"` |
-| In-memory `MOCK_*` dicts | Data lost on restart | Create repository + real DB |
-| Missing `ARG NEXT_PUBLIC_API_URL` | Wrong API URL baked in | Add `ARG NEXT_PUBLIC_API_URL` before build |
-| Manual `get_db()` with `__anext__()` | Session leaks | `Depends(get_db)` |
-| Hardcoded `localhost:PORT` | Breaks Docker/K8s | Use `process.env.NEXT_PUBLIC_API_URL` |
-| No alembic migration for new models | Schema drift | `alembic revision --autogenerate` |
-| **Installing `shadcn` CLI v4** | Breaks Tailwind v3 build | Use pre-built components in scaffold |
-| **Using `@base-ui/react`** | Incompatible with Tailwind v3 | Use pre-built components in scaffold |
-| **Using non-standard Postgres port in tests** | CI service maps 5432 only | Always use `localhost:5432` in conftest.py |
-| **Upgrading `pytest-asyncio`** | v1.3.0 breaks fixture scoping | Keep `pytest-asyncio==0.24.0` pinned |
-| **Deleting `.github/workflows/ci.yml`** | No CI runs, no quality gate | Leave CI workflow intact |
-| **Missing `src/lib/utils.ts`** | Pre-built UI components fail to import `cn()` | Already in scaffold — do NOT delete |
-| **Using `MappedAsDataclass` in `Base`** | Relationship/foreign-key sync conflicts on flush | Use plain `DeclarativeBase` only |
-| **`default_factory` in `mapped_column()`** | SQLAlchemy interprets it as dataclass config; throws `ArgumentError` on plain `DeclarativeBase` | Use `default=` with a callable (e.g., `default=uuid.uuid4`) |
-| **Timezone-aware `datetime` in models** | `DataError` with `TIMESTAMP WITHOUT TIME ZONE` | Use `utc_now()` from `app.core.utils` or `datetime.now(timezone.utc).replace(tzinfo=None)` |
-
-## Database Rules
-
-1. All models MUST inherit from `Base` in `app.models.base`
-2. All models MUST use `Mapped[...]` and `mapped_column()`
-3. **Never use `default_factory=` in `mapped_column()`** — use `default=` instead
-3. Relationships MUST specify `lazy="selectin"`
-4. All new tables MUST get an alembic migration
-5. Use `ondelete="CASCADE"` for child tables
-6. Use `ondelete="SET NULL"` for optional references
+### API contract
+- All app endpoints live under `/api/v1/rag` (health is the lone exception at `/health`).
+- When you change a route's path or response shape, update `frontend/src/lib/api.ts` (and
+  any page using it) in the same change. A mismatch here silently breaks the UI.
 
 ## How to Add a Feature
+1. **Read this file.** Check `REVISED-PRD.md` / `PLAN-v1.2.md` for product context.
+2. **Backend:** add/update a Pydantic schema in `app/models/schemas.py`, the logic in the
+   relevant `app/` package, and a router in `app/api/routes/` (mounted in `app/api/main.py`).
+   Add tests in `tests/`.
+3. **Frontend:** add the typed call in `src/lib/api.ts`, then the page/component.
+4. **Verify:** `pytest`, `cd frontend && npm run build`, and `docker compose config`.
 
-1. **Read this file** and `PLAN-v1.2.md`
-2. **Backend:**
-   - Add/update model in `app/models/`
-   - Add/update schema in `app/schemas/`
-   - Add repository in `app/repositories/`
-   - Add/update router in `app/api/v1/`
-   - Add tests in `tests/`
-   - Generate alembic migration
-3. **Frontend:**
-   - Add API types/functions to `src/lib/api.ts`
-   - Add page in `src/app/` or component using pre-built UI components
-4. **Docker:** Verify `docker compose config` and `docker compose up -d`
-5. **Commit** with conventional commit message
+## Testing
+- `pytest` from the repo root. Tests use `httpx.AsyncClient` + `ASGITransport` and override
+  the `Depends(...)` providers (`tests/conftest.py`) — **no external services required**.
+- Every new router endpoint should have an integration test; new pure logic gets a unit test.
+- CI (`.github/workflows/ci.yml`) runs the suite (`uv pip install -e ".[dev]"` + `pytest`)
+  and the frontend build. `claude-code-review.yml` runs an automated review on PRs.
 
-## Testing Requirements
+## Running Locally
+- **Backend deps:** Qdrant (`:6333`) and Redis (`:6379`) — start them via
+  `docker compose up qdrant redis` (or the full stack with `docker compose up`).
+- **Config:** copy `.env.example` → `.env`; set `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` for
+  generation. All settings map 1:1 to `app/core/config.py`.
+- **First run** creates the Qdrant collection with named `dense`+`sparse` vectors. If you
+  have an older single-vector collection, drop it and re-ingest.
 
-- Every new repository MUST have tests
-- Every new router endpoint MUST be covered
-- Use `pytest-asyncio` with `async` test functions and `@pytest.mark.asyncio`
-- Use `httpx.AsyncClient` with `ASGITransport`
-- Override `get_db` dependency with test session in `conftest.py`
-- Tests MUST use `localhost:5432` for PostgreSQL (CI requirement)
+## Anti-Patterns — Avoid
 
-## Port Registry
+| Anti-pattern | Why | Instead |
+|--------------|-----|---------|
+| Reintroducing Postgres / SQLAlchemy / Alembic | This app is Qdrant + Redis only | Use Qdrant for vectors, Redis for metadata |
+| Changing a backend route without updating `src/lib/api.ts` | Silently breaks the UI | Update both sides together |
+| Mounting an endpoint outside `/api/v1/rag` | Frontend assumes that prefix | Keep the prefix (health excepted) |
+| `curl` in a `python:*-slim` healthcheck | No `curl` in the image | `python -c "import urllib.request; urllib.request.urlopen(...)"` |
+| Frontend Dockerfile without `ARG NEXT_PUBLIC_API_URL` | Wrong API URL baked in | Declare the ARG before `npm run build` |
+| Single unnamed Qdrant vector | Hybrid search needs `dense`+`sparse` | Use named vectors (see `qdrant_store.py`) |
+| `print()` for diagnostics | Unstructured logs | `structlog` |
 
-| App | Backend | Frontend | Postgres DB |
-|-----|---------|----------|-------------|
-| dclaw-chat | 8090 | 3000 | dclaw_chat |
-| dclaw-med | 8092 | 3004 | dclaw_med |
-| dclaw-learn | 8093 | 3003 | dclaw_learn |
-| dclaw-code | 8094 | 3005 | dclaw_code |
-| dclaw-legal | 8099 | 3013 | dclaw_legal |
-| dclaw-crm | 8095 | 3006 | dclaw_crm |
-| dclaw-finance | 8096 | 3007 | dclaw_finance |
-| dclaw-hr | 8097 | 3008 | dclaw_hr |
-| dclaw-inventory | 8098 | 3009 | dclaw_inventory |
-| dclaw-project | 8100 | 3010 | dclaw_project |
-| dclaw-support | 8101 | 3014 | dclaw_support |
-| dclaw-marketing | 8102 | 3015 | dclaw_marketing |
-| dclaw-real-estate | 8103 | 3016 | dclaw_real_estate |
-| dclaw-sales | 8104 | 3017 | dclaw_sales |
-| dclaw-recruit | 8105 | 3018 | dclaw_recruit |
-| dclaw-vendor | 8106 | 3019 | dclaw_vendor |
-| dclaw-doc | 8107 | 3020 | dclaw_doc |
-| dclaw-calendar | 8108 | 3021 | dclaw_calendar |
+## Notes / Known Gaps
+- The `LLMGateway` supports OpenAI/Anthropic; the PRD also calls for a local **Ollama**
+  fallback — not yet implemented.
+- A `celery`/`app.tasks` worker is referenced in `infra/docker-compose.yml` but the task
+  module does not exist yet.
+- Agentic (multi-step) RAG is not implemented (PRD P0.4).
