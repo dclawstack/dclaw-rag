@@ -169,13 +169,13 @@ export default function IngestPage() {
                       Drag & drop a file here, or click to browse
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Supports PDF, Markdown, TXT
+                      Supports PDF, Word, Markdown, HTML, CSV, and text files
                     </p>
                     <input
                       type="file"
                       className="hidden"
                       onChange={handleFileInput}
-                      accept=".pdf,.md,.txt,.docx"
+                      accept=".pdf,.docx,.md,.markdown,.txt,.html,.htm,.csv,.tsv,.json,.yaml,.yml,.rst,.log,.text"
                     />
                   </label>
                 )}
