@@ -127,8 +127,8 @@ dclaw-rag/
 | `print()` for diagnostics | Unstructured logs | `structlog` |
 
 ## Notes / Known Gaps
-- The `LLMGateway` supports OpenAI/Anthropic; the PRD also calls for a local **Ollama**
-  fallback — not yet implemented.
+- The `LLMGateway` supports OpenAI/Anthropic, with an automatic local **Ollama** fallback
+  when the cloud provider errors (`FallbackGateway`; toggle via `LLM_FALLBACK_TO_OLLAMA`).
 - A `celery`/`app.tasks` worker is referenced in `infra/docker-compose.yml` but the task
   module does not exist yet.
 - Agentic (multi-step) RAG is not implemented (PRD P0.4).

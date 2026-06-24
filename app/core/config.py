@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     anthropic_api_key: str | None = None
 
+    ollama_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.1"
+    llm_fallback_to_ollama: bool = True
+
     sparse_model: str = "Qdrant/bm25"
     hybrid_candidate_k: int = 100
     rrf_k: int = 60
