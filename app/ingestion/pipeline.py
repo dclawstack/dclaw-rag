@@ -7,13 +7,14 @@ from app.db.qdrant_store import QdrantStore
 from app.ingestion.chunkers.hierarchical import hierarchical_chunk
 from app.ingestion.loaders import get_extractor
 from app.models.schemas import ChunkMetadata, DocumentChunk, IngestRequest
-from app.retrieval.embedder import Embedder
+from app.retrieval.embedder import Embedder, SparseEmbedder
 
 
 class IngestionPipeline:
     def __init__(self) -> None:
         self.store = QdrantStore()
         self.embedder = Embedder()
+        self.sparse_embedder = SparseEmbedder()
 
     def ingest_file(self, file_path: Path, request: IngestRequest) -> tuple[UUID, int]:
         extractor = get_extractor(file_path)
@@ -37,6 +38,7 @@ class IngestionPipeline:
 
         chunks = hierarchical_chunk(raw_text, doc_id=doc_id, metadata=metadata)
         chunks = self.embedder.embed_chunks(chunks)
+        chunks = self.sparse_embedder.embed_chunks(chunks)
         self.store.upsert_chunks(chunks)
 
         return doc_id, len(chunks)
@@ -57,6 +59,7 @@ class IngestionPipeline:
 
         chunks = hierarchical_chunk(text, doc_id=doc_id, metadata=metadata)
         chunks = self.embedder.embed_chunks(chunks)
+        chunks = self.sparse_embedder.embed_chunks(chunks)
         self.store.upsert_chunks(chunks)
 
         return doc_id, len(chunks)
