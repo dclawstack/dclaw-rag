@@ -107,6 +107,10 @@ dclaw-rag/
   and the frontend build. `claude-code-review.yml` runs an automated review on PRs.
 
 ## Running Locally
+- **Python deps:** install CPU-only torch first, then the package — the app runs on CPU,
+  and the default `torch` (a transitive dep) otherwise pulls ~5GB of unused CUDA wheels:
+  `pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu && pip install -e ".[dev]"`.
+  (The Dockerfile and CI do this automatically.)
 - **Backend deps:** Qdrant (`:6333`) and Redis (`:6379`) — start them via
   `docker compose up qdrant redis` (or the full stack with `docker compose up`).
 - **Config:** copy `.env.example` → `.env`; set `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` for
