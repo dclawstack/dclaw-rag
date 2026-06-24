@@ -37,13 +37,20 @@ class AnthropicGateway(LLMGateway):
         self.model = settings.llm_model
 
     async def complete(self, messages: list[dict], temperature: float = 0.2) -> str:
+        # Anthropic takes the system prompt as a top-level `system` arg, not a
+        # message with role "system" (which it rejects). Split it out.
+        system = "\n\n".join(m["content"] for m in messages if m["role"] == "system")
+        chat = [m for m in messages if m["role"] != "system"]
+        kwargs: dict = {
+            "model": self.model,
+            "max_tokens": 2048,
+            "temperature": temperature,
+            "messages": chat,
+        }
+        if system:
+            kwargs["system"] = system
         try:
-            response = await self.client.messages.create(
-                model=self.model,
-                max_tokens=2048,
-                temperature=temperature,
-                messages=messages,
-            )
+            response = await self.client.messages.create(**kwargs)
             return response.content[0].text if response.content else ""
         except Exception as exc:
             raise GenerationError(f"Anthropic completion failed: {exc}") from exc
@@ -84,8 +91,13 @@ class FallbackGateway(LLMGateway):
     async def complete(self, messages: list[dict], temperature: float = 0.2) -> str:
         try:
             return await self.primary.complete(messages, temperature)
-        except GenerationError:
-            return await self.fallback.complete(messages, temperature)
+        except GenerationError as primary_exc:
+            try:
+                return await self.fallback.complete(messages, temperature)
+            except GenerationError as fallback_exc:
+                raise GenerationError(
+                    f"primary failed: {primary_exc}; fallback failed: {fallback_exc}"
+                ) from fallback_exc
 
 
 def _build_gateway(provider: str) -> LLMGateway:

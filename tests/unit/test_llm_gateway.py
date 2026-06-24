@@ -1,6 +1,9 @@
+import pytest
+
 from app.core.exceptions import GenerationError
 from app.generation import llm_gateway
 from app.generation.llm_gateway import (
+    AnthropicGateway,
     FallbackGateway,
     LLMGateway,
     OllamaGateway,
@@ -48,7 +51,57 @@ async def test_fallback_switches_to_fallback_on_primary_failure():
 
     assert result == "from fallback"
     assert primary.called
-    assert fallback.called
+
+
+class _FailingFallback(LLMGateway):
+    async def complete(self, messages, temperature=0.2):
+        raise GenerationError("fallback down")
+
+
+async def test_fallback_raises_combined_error_when_both_fail():
+    gateway = FallbackGateway(_FailingGateway(), _FailingFallback())
+
+    with pytest.raises(GenerationError) as exc_info:
+        await gateway.complete([{"role": "user", "content": "hi"}])
+
+    message = str(exc_info.value)
+    assert "primary down" in message  # the real cause is not masked
+    assert "fallback down" in message
+
+
+class _RecordingMessages:
+    def __init__(self):
+        self.kwargs = None
+
+    async def create(self, **kwargs):
+        self.kwargs = kwargs
+        block = type("Block", (), {"type": "text", "text": "answer"})()
+        return type("Resp", (), {"content": [block]})()
+
+
+class _RecordingClient:
+    def __init__(self):
+        self.messages = _RecordingMessages()
+
+
+async def test_anthropic_gateway_splits_system_into_top_level_arg():
+    # bypass __init__ so we don't construct a real anthropic client
+    gateway = AnthropicGateway.__new__(AnthropicGateway)
+    gateway.client = _RecordingClient()
+    gateway.model = "claude-sonnet-4-6"
+
+    out = await gateway.complete(
+        [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "hi"},
+        ]
+    )
+
+    assert out == "answer"
+    kwargs = gateway.client.messages.kwargs
+    assert kwargs["system"] == "You are helpful."  # system hoisted out
+    assert kwargs["messages"] == [{"role": "user", "content": "hi"}]  # no system role
+    assert all(m["role"] != "system" for m in kwargs["messages"])
 
 
 def test_get_llm_gateway_wraps_cloud_provider_with_ollama_fallback(monkeypatch):
