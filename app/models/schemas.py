@@ -134,3 +134,13 @@ class Document(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     version: str = "0.1.0"
+
+
+class SystemInfo(BaseModel):
+    version: str = "0.1.0"
+    backend_port: int
+    vector_store: str = "Qdrant"
+    embedding_model: str
+    reranker_model: str
+    llm_provider: str
+    llm_model: str
