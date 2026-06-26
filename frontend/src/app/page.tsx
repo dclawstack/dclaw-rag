@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { SystemStatus } from "@/components/system-status";
 import Link from "next/link";
 import { Search, FileUp, Database, Zap, ArrowRight, Sparkles } from "lucide-react";
 
@@ -104,29 +104,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">System Status</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Backend API</span>
-            <Badge variant="secondary">Port 8090</Badge>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Vector Store</span>
-            <Badge variant="secondary">Qdrant</Badge>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Embedding Model</span>
-            <Badge variant="secondary">BAAI/bge-large-en-v1.5</Badge>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">LLM Gateway</span>
-            <Badge variant="secondary">OpenRouter + Kimi K2.5</Badge>
-          </div>
-        </CardContent>
-      </Card>
+      <SystemStatus />
     </div>
   );
 }

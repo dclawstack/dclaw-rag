@@ -63,6 +63,20 @@ export async function healthCheck(): Promise<{ status: string; version?: string 
   return apiFetch("/health");
 }
 
+export interface SystemInfo {
+  version: string;
+  backend_port: number;
+  vector_store: string;
+  embedding_model: string;
+  reranker_model: string;
+  llm_provider: string;
+  llm_model: string;
+}
+
+export async function getSystemInfo(): Promise<SystemInfo> {
+  return apiFetch("/api/v1/rag/system");
+}
+
 export async function queryRag(params: {
   question: string;
   top_k: number;
