@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8090
 
+    cors_allow_origins: list[str] = ["*"]
+
     embedding_model: str = "BAAI/bge-large-en-v1.5"
     embedding_device: str = "cpu"
     embedding_batch_size: int = 32
