@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import agent, collections, health, ingest, query, system
+from app.api.routes import agent, collections, health, ingest, query, stats, system
 from app.core.config import settings
 from app.core.logging import configure_logging
 
@@ -22,6 +22,7 @@ app.add_middleware(
 
 app.include_router(health.router, tags=["Health"])
 app.include_router(system.router, prefix="/api/v1/rag", tags=["System"])
+app.include_router(stats.router, prefix="/api/v1/rag", tags=["System"])
 app.include_router(query.router, prefix="/api/v1/rag", tags=["Query"])
 app.include_router(agent.router, prefix="/api/v1/rag", tags=["Agent"])
 app.include_router(collections.router, prefix="/api/v1/rag", tags=["Collections"])

@@ -77,6 +77,16 @@ export async function getSystemInfo(): Promise<SystemInfo> {
   return apiFetch("/api/v1/rag/system");
 }
 
+export interface Stats {
+  collections: number;
+  documents: number;
+  chunks: number;
+}
+
+export async function getStats(): Promise<Stats> {
+  return apiFetch("/api/v1/rag/stats");
+}
+
 export async function queryRag(params: {
   question: string;
   top_k: number;

@@ -144,3 +144,9 @@ class SystemInfo(BaseModel):
     reranker_model: str
     llm_provider: str
     llm_model: str
+
+
+class Stats(BaseModel):
+    collections: int
+    documents: int
+    chunks: int
