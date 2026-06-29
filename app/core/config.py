@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
 
+    # Abuse / resource limits.
+    rate_limit_per_minute: int = 60  # per tenant, on the costly endpoints; 0 disables
+    max_upload_bytes: int = 10 * 1024 * 1024  # 10 MiB per uploaded file
+    max_request_bytes: int = 12 * 1024 * 1024  # global request body cap
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 

@@ -2,7 +2,13 @@ import time
 
 from fastapi import APIRouter, Depends
 
-from app.api.dependencies import Principal, get_llm, get_principal, get_searcher
+from app.api.dependencies import (
+    Principal,
+    enforce_rate_limit,
+    get_llm,
+    get_principal,
+    get_searcher,
+)
 from app.core.config import settings
 from app.generation.llm_gateway import LLMGateway
 from app.generation.synthesis import (
@@ -23,7 +29,9 @@ ABSTAIN_MESSAGE = (
 )
 
 
-@router.post("/query", response_model=QueryResponse)
+@router.post(
+    "/query", response_model=QueryResponse, dependencies=[Depends(enforce_rate_limit)]
+)
 async def query(
     request: QueryRequest,
     searcher: Searcher = Depends(get_searcher),
