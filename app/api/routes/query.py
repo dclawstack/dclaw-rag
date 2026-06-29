@@ -1,5 +1,6 @@
 import time
 
+import structlog
 from fastapi import APIRouter, Depends
 
 from app.api.dependencies import (
@@ -9,6 +10,7 @@ from app.api.dependencies import (
     get_principal,
     get_searcher,
 )
+from app.core import metrics
 from app.core.config import settings
 from app.generation.llm_gateway import LLMGateway
 from app.generation.synthesis import (
@@ -20,6 +22,8 @@ from app.generation.synthesis import (
 )
 from app.models.schemas import QueryRequest, QueryResponse
 from app.retrieval.search import Searcher
+
+logger = structlog.get_logger("api.query")
 
 router = APIRouter()
 
@@ -46,13 +50,24 @@ async def query(
     if request.collection_id:
         filters["collection_id"] = request.collection_id
 
+    t_retrieval = time.perf_counter()
     chunks = searcher.search(request.question, top_k=request.top_k, filters=filters or None)
+    retrieval_ms = round((time.perf_counter() - t_retrieval) * 1000, 1)
     retrieved = [to_retrieved_chunk(c) for c in chunks]
 
     # Honest abstention: if nothing cleared the relevance bar, don't ask the LLM —
     # saying "I don't know" beats a confident hallucination from weak context.
     top_score = max((c.score or 0.0 for c in chunks), default=float("-inf"))
     if not chunks or top_score < settings.abstain_threshold:
+        metrics.QUERIES.labels(abstained="true").inc()
+        logger.info(
+            "query",
+            tenant=principal.tenant_id,
+            abstained=True,
+            n_chunks=len(chunks),
+            retrieval_ms=retrieval_ms,
+            total_ms=_elapsed_ms(start),
+        )
         return QueryResponse(
             query=request.question,
             answer=ABSTAIN_MESSAGE,
@@ -64,6 +79,7 @@ async def query(
             latency_ms=_elapsed_ms(start),
         )
 
+    t_generation = time.perf_counter()
     prompt = render_rag_prompt(chunks, request.question)
     messages = [
         {"role": "system", "content": "You are a helpful RAG assistant."},
@@ -77,6 +93,18 @@ async def query(
     if settings.verify_answers and request.verify:
         faithfulness, unsupported_claims = await verify_answer(answer, chunks, llm)
 
+    metrics.QUERIES.labels(abstained="false").inc()
+    logger.info(
+        "query",
+        tenant=principal.tenant_id,
+        abstained=False,
+        n_chunks=len(chunks),
+        confidence=confidence,
+        faithfulness=faithfulness,
+        retrieval_ms=retrieval_ms,
+        generation_ms=round((time.perf_counter() - t_generation) * 1000, 1),
+        total_ms=_elapsed_ms(start),
+    )
     return QueryResponse(
         query=request.question,
         answer=answer,

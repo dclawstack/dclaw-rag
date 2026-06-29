@@ -4,7 +4,11 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware
+from app.api.middleware import (
+    BodySizeLimitMiddleware,
+    RequestContextMiddleware,
+    SecurityHeadersMiddleware,
+)
 from app.api.routes import agent, collections, health, ingest, keys, query, stats, system
 from app.core.config import settings
 from app.core.logging import configure_logging
@@ -43,6 +47,8 @@ app.add_middleware(
 )
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(BodySizeLimitMiddleware)
+# Added last so it is outermost: it times the whole request and tags every log.
+app.add_middleware(RequestContextMiddleware)
 
 app.include_router(health.router, tags=["Health"])
 app.include_router(system.router, prefix="/api/v1/rag", tags=["System"])
