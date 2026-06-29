@@ -1,0 +1,48 @@
+{
+  "description": "Self-contained retrieval + abstention eval. The corpus is ingested into an isolated Qdrant collection, then each answerable question must retrieve a chunk from its expected source, and each unanswerable question must score below the abstain threshold.",
+  "corpus": [
+    {
+      "source": "solar-system",
+      "title": "The Solar System",
+      "text": "The Solar System consists of the Sun and the objects that orbit it. There are eight planets: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, and Neptune. Jupiter is the largest planet, with a mass more than twice that of all the other planets combined. Mars is often called the Red Planet because of the iron oxide on its surface. Neptune is the farthest planet from the Sun and takes about 165 Earth years to complete a single orbit."
+    },
+    {
+      "source": "photosynthesis",
+      "title": "How Photosynthesis Works",
+      "text": "Photosynthesis is the process by which green plants, algae, and some bacteria convert light energy into chemical energy. Using sunlight, water, and carbon dioxide, plants produce glucose and release oxygen as a byproduct. The process takes place mainly in the chloroplasts, which contain the green pigment chlorophyll. Chlorophyll absorbs light most strongly in the blue and red wavelengths and reflects green light, which is why most plants appear green."
+    },
+    {
+      "source": "http-protocol",
+      "title": "The HTTP Protocol",
+      "text": "HTTP, the Hypertext Transfer Protocol, is the foundation of data communication on the World Wide Web. It is a stateless, request-response protocol that runs on top of TCP. Common HTTP methods include GET for retrieving resources, POST for submitting data, PUT for updating, and DELETE for removing resources. Status codes communicate the result of a request: 200 means success, 404 means the resource was not found, and 500 indicates a server error."
+    },
+    {
+      "source": "acme-finance",
+      "title": "Acme Q3 2026 Financial Report",
+      "text": "Acme Corporation reported strong results in the third quarter of 2026. Revenue reached 5.0 million dollars, up from 3.2 million dollars in the first quarter. The growth was driven primarily by the enterprise software division and an expansion into the European market. Operating margin improved to 18 percent, and the company ended the quarter with 12 million dollars in cash reserves."
+    },
+    {
+      "source": "great-wall",
+      "title": "The Great Wall of China",
+      "text": "The Great Wall of China is a series of fortifications built across the historical northern borders of ancient Chinese states. Construction spanned many centuries, with the most well-known sections built during the Ming dynasty. The wall stretches for thousands of kilometers and was constructed to protect against nomadic invasions and raids. Contrary to popular belief, the Great Wall is not visible to the naked eye from space."
+    }
+  ],
+  "answerable": [
+    { "question": "Which is the largest planet in the Solar System?", "expected_source": "solar-system" },
+    { "question": "How many planets are there and which one is farthest from the Sun?", "expected_source": "solar-system" },
+    { "question": "Why do most plants look green?", "expected_source": "photosynthesis" },
+    { "question": "What do plants produce during photosynthesis?", "expected_source": "photosynthesis" },
+    { "question": "What does HTTP status code 404 mean?", "expected_source": "http-protocol" },
+    { "question": "Which HTTP method is used to retrieve a resource?", "expected_source": "http-protocol" },
+    { "question": "What was Acme's revenue in Q3 2026?", "expected_source": "acme-finance" },
+    { "question": "What drove Acme's revenue growth?", "expected_source": "acme-finance" },
+    { "question": "During which dynasty were the best-known sections of the Great Wall built?", "expected_source": "great-wall" },
+    { "question": "Is the Great Wall of China visible from space with the naked eye?", "expected_source": "great-wall" }
+  ],
+  "unanswerable": [
+    { "question": "What is the recipe for a classic Italian tiramisu?" },
+    { "question": "Who won the FIFA World Cup in 1998?" },
+    { "question": "How do I change the oil in a diesel engine?" },
+    { "question": "What are the health benefits of regular swimming?" }
+  ]
+}

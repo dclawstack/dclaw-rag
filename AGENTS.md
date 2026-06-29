@@ -65,7 +65,8 @@ dclaw-rag/
 │   └── retrieval/                # embedder (dense+sparse), reranker, search (RRF)
 ├── frontend/                     # Next.js app (see its own conventions above)
 ├── tests/                        # pytest (unit/ + integration/)
-├── scripts/                      # ingest_folder, evaluate_retrieval
+├── eval/                         # golden_set.json for the RAG eval harness
+├── scripts/                      # ingest_folder, evaluate (RAG eval), evaluate_retrieval
 ├── helm/                         # K8s manifests
 ├── infra/docker-compose.yml      # full dev stack (api + qdrant + redis)
 ├── docker-compose.yml            # app + qdrant + redis
@@ -97,14 +98,19 @@ dclaw-rag/
    relevant `app/` package, and a router in `app/api/routes/` (mounted in `app/api/main.py`).
    Add tests in `tests/`.
 3. **Frontend:** add the typed call in `src/lib/api.ts`, then the page/component.
-4. **Verify:** `pytest`, `cd frontend && npm run build`, and `docker compose config`.
+4. **Verify:** `ruff check`, `mypy app/`, `pytest`, `cd frontend && npm run build && npm run lint`,
+   and `docker compose config`.
 
-## Testing
+## Testing & quality gates
 - `pytest` from the repo root. Tests use `httpx.AsyncClient` + `ASGITransport` and override
   the `Depends(...)` providers (`tests/conftest.py`) — **no external services required**.
 - Every new router endpoint should have an integration test; new pure logic gets a unit test.
-- CI (`.github/workflows/ci.yml`) runs the suite (`uv pip install -e ".[dev]"` + `pytest`)
-  and the frontend build. `claude-code-review.yml` runs an automated review on PRs.
+- CI (`.github/workflows/ci.yml`) runs the blocking gates on every PR: **ruff**, **mypy**,
+  **pip-audit**, **pytest** (backend) and **eslint** + **next build** (frontend).
+  `claude-code-review.yml` runs an automated review on PRs.
+- **RAG quality eval** (`.github/workflows/eval.yml`, `scripts/evaluate.py`) runs nightly, on
+  demand, and on retrieval-touching PRs: it ingests `eval/golden_set.json` into a throwaway
+  Qdrant collection and gates on hit-rate / MRR / abstention accuracy. Needs no LLM.
 
 ## Running Locally
 - **Python deps:** install CPU-only torch first, then the package — the app runs on CPU,

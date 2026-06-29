@@ -1,0 +1,57 @@
+name: Eval
+
+# RAG quality regression gate. Heavier than CI (real Qdrant + embedding/rerank
+# models), so it runs nightly and on demand — plus on PRs that touch the
+# retrieval/ingestion/eval code, where a regression is most likely.
+on:
+  schedule:
+    - cron: "0 6 * * *" # nightly 06:00 UTC
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/retrieval/**"
+      - "app/ingestion/**"
+      - "app/db/qdrant_store.py"
+      - "app/core/config.py"
+      - "scripts/evaluate.py"
+      - "eval/**"
+      - ".github/workflows/eval.yml"
+
+jobs:
+  rag-eval:
+    runs-on: ubuntu-latest
+    services:
+      qdrant:
+        image: qdrant/qdrant:latest
+        ports:
+          - 6333:6333
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Cache embedding/rerank models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.cache/fastembed
+          key: rag-models-bge-large-reranker-bm25-v1
+      - name: Install uv
+        run: pip install uv
+      - name: Install CPU-only torch
+        run: uv pip install --system torch torchvision --index-url https://download.pytorch.org/whl/cpu
+      - name: Install dependencies
+        run: uv pip install --system -e ".[dev]"
+      - name: Wait for Qdrant
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:6333/readyz > /dev/null; then echo "Qdrant ready"; exit 0; fi
+            sleep 2
+          done
+          echo "Qdrant did not become ready" && exit 1
+      - name: Run RAG evaluation
+        env:
+          QDRANT_URL: http://localhost:6333
+        run: python scripts/evaluate.py
