@@ -1,4 +1,4 @@
-from app.api.dependencies import get_collection_store, get_store
+from app.api.dependencies import get_collection_store, get_document_store, get_store
 from app.api.main import app
 
 BASE = "/api/v1/rag/collections"
@@ -27,23 +27,28 @@ class _FakeCollectionStore:
 
 
 class _FakeQdrant:
-    def __init__(self, chunk_count=0, docs=None):
+    def __init__(self, chunk_count=0):
         self._chunk_count = chunk_count
-        self._docs = docs or []
 
     def count_points(self, filters=None):
         return self._chunk_count
 
-    def count_documents(self, filters=None):
+
+class _FakeDocStore:
+    def __init__(self, docs=None):
+        self._docs = docs or []
+
+    def count(self, tenant_id, collection_id=None):
         return len(self._docs)
 
-    def list_documents(self, filters=None, limit=100, offset=0):
+    def list(self, tenant_id, collection_id=None, limit=100, offset=0):
         return self._docs[offset : offset + limit]
 
 
-def _use(store, qdrant):
+def _use(store, qdrant, docs=None):
     app.dependency_overrides[get_collection_store] = lambda: store
     app.dependency_overrides[get_store] = lambda: qdrant
+    app.dependency_overrides[get_document_store] = lambda: docs or _FakeDocStore()
 
 
 async def test_create_then_list_collection(client):
@@ -64,16 +69,17 @@ async def test_create_then_list_collection(client):
     assert listed[0]["id"] == created["id"]
 
 
-async def test_list_reports_live_counts_from_qdrant(client):
+async def test_list_reports_live_counts(client):
     store = _FakeCollectionStore()
-    _use(store, _FakeQdrant(chunk_count=7, docs=[{"id": "d1", "filename": "a.md"}]))
+    docs = [{"id": "d1", "filename": "a.md", "status": "ready", "created_at": ""}]
+    _use(store, _FakeQdrant(chunk_count=7), _FakeDocStore(docs))
 
     created = (await client.post(BASE, json={"name": "Docs"})).json()
     listed = (await client.get(BASE)).json()
 
     assert listed[0]["id"] == created["id"]
-    assert listed[0]["chunk_count"] == 7
-    assert listed[0]["document_count"] == 1
+    assert listed[0]["chunk_count"] == 7  # from Qdrant (indexed count)
+    assert listed[0]["document_count"] == 1  # from the registry
 
 
 async def test_delete_collection(client):
@@ -98,7 +104,7 @@ async def test_documents_404_for_unknown_collection(client):
 async def test_documents_listing_for_existing_collection(client):
     store = _FakeCollectionStore()
     docs = [{"id": "d1", "filename": "a.md", "status": "ready", "created_at": ""}]
-    _use(store, _FakeQdrant(chunk_count=2, docs=docs))
+    _use(store, _FakeQdrant(), _FakeDocStore(docs))
 
     cid = (await client.post(BASE, json={"name": "Docs"})).json()["id"]
     resp = await client.get(f"{BASE}/{cid}/documents")
@@ -115,7 +121,7 @@ async def test_documents_listing_honors_limit_and_offset(client):
         {"id": f"d{i}", "filename": f"{i}.md", "status": "ready", "created_at": ""}
         for i in range(5)
     ]
-    _use(store, _FakeQdrant(chunk_count=10, docs=docs))
+    _use(store, _FakeQdrant(), _FakeDocStore(docs))
 
     cid = (await client.post(BASE, json={"name": "Docs"})).json()["id"]
 

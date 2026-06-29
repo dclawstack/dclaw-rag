@@ -31,10 +31,16 @@ questions and get cited, LLM-synthesized answers.
   `app/db/qdrant_store.py`.
 - **Collections** are lightweight metadata records persisted in **Redis**
   (`app/db/collection_store.py`); documents are associated via `metadata.collection_id`.
-- **Ingestion pipeline** (`app/ingestion/`): extractor → hierarchical chunker → dense +
-  sparse embeddings → Qdrant upsert. Supported formats live in
-  `app/ingestion/extractors/` + the `loaders` registry (PDF, DOCX, HTML, CSV/TSV,
-  Markdown, plaintext).
+- **Documents** are tracked in a **Redis registry** (`app/db/document_store.py`) — the
+  source of truth for document listing/counts and ingestion **status** (pending →
+  processing → ready/failed). Qdrant holds the chunks; tenant/collection/doc payload
+  indexes keep counts and filtered search off a full scan.
+- **Ingestion is async:** the route extracts text, registers a `pending` document, and
+  enqueues a **Celery** task (`app/ingestion/tasks.py`, `app/worker.py`) that does the heavy
+  chunk → embed → upsert off the request path and updates status. Idempotent by content
+  checksum. Run a worker: `celery -A app.worker.celery_app worker --queues ingestion`.
+  Supported formats live in `app/ingestion/extractors/` + the `loaders` registry (PDF,
+  DOCX, HTML, CSV/TSV, Markdown, plaintext).
 - **Generation** (`app/generation/`): `LLMGateway` (OpenAI / Anthropic) + Jinja prompt.
 - **Logging:** `structlog` (`app/core/logging.py`) — no `print()`.
 

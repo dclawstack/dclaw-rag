@@ -1,13 +1,17 @@
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
-from app.api.dependencies import Principal, get_pipeline, get_principal
+from app.api.dependencies import Principal, get_document_store, get_principal
 from app.core.exceptions import IngestionError
-from app.ingestion.pipeline import IngestionPipeline
-from app.models.schemas import IngestRequest, IngestResponse, TextIngestRequest
+from app.db.document_store import DocumentStore
+from app.ingestion.pipeline import checksum, extract_file_text
+from app.ingestion.tasks import ingest_document_task
+from app.models.schemas import Document, IngestRequest, IngestResponse, TextIngestRequest
 
 router = APIRouter()
 
@@ -35,11 +39,48 @@ def _build_request(
     )
 
 
+def _enqueue(text: str, request: IngestRequest, store: DocumentStore) -> IngestResponse:
+    """Register the document (pending) and hand the heavy work to the worker.
+
+    Idempotent by content checksum: a still-pending/ready document with the same
+    content is returned as-is; a previously failed one is retried under its id."""
+    if not text.strip():
+        raise IngestionError("No text to ingest")
+
+    content_hash = checksum(text)
+    existing = store.find_by_checksum(request.tenant_id or "", content_hash)
+    if existing and existing["status"] != "failed":
+        return IngestResponse(
+            doc_id=UUID(existing["id"]),
+            chunks_inserted=existing.get("chunk_count", 0),
+            status=existing["status"],
+        )
+
+    doc_id = UUID(existing["id"]) if existing else uuid4()
+    store.create(
+        {
+            "id": str(doc_id),
+            "tenant_id": request.tenant_id,
+            "collection_id": request.collection_id,
+            "source": request.source,
+            "title": request.title,
+            "filename": request.title or request.source or str(doc_id),
+            "status": "pending",
+            "checksum": content_hash,
+            "chunk_count": 0,
+            "error": None,
+            "created_at": datetime.now(tz=UTC).isoformat(),
+        }
+    )
+    ingest_document_task.delay(str(doc_id), text, request.model_dump(mode="json"))
+    return IngestResponse(doc_id=doc_id, chunks_inserted=0, status="pending")
+
+
 @router.post("/upload", response_model=IngestResponse)
 async def upload_document(
     file: UploadFile = File(...),
     metadata: str = Form("{}"),
-    pipeline: IngestionPipeline = Depends(get_pipeline),
+    store: DocumentStore = Depends(get_document_store),
     principal: Principal = Depends(get_principal),
 ) -> IngestResponse:
     if not file.filename:
@@ -53,22 +94,33 @@ async def upload_document(
         tmp_path = Path(tmp.name)
 
     try:
-        request = _build_request(
-            _parse_metadata(metadata), principal.tenant_id, default_title=file.filename
-        )
-        doc_id, chunks_inserted = pipeline.ingest_file(tmp_path, request)
+        text = extract_file_text(tmp_path)
     finally:
         tmp_path.unlink(missing_ok=True)
 
-    return IngestResponse(doc_id=doc_id, chunks_inserted=chunks_inserted, status="success")
+    request = _build_request(
+        _parse_metadata(metadata), principal.tenant_id, default_title=file.filename
+    )
+    return _enqueue(text, request, store)
 
 
 @router.post("/text", response_model=IngestResponse)
 async def ingest_text(
     body: TextIngestRequest,
-    pipeline: IngestionPipeline = Depends(get_pipeline),
+    store: DocumentStore = Depends(get_document_store),
     principal: Principal = Depends(get_principal),
 ) -> IngestResponse:
     request = _build_request(body.metadata, principal.tenant_id, default_title="Text ingestion")
-    doc_id, chunks_inserted = pipeline.ingest_text(body.text, request)
-    return IngestResponse(doc_id=doc_id, chunks_inserted=chunks_inserted, status="success")
+    return _enqueue(body.text, request, store)
+
+
+@router.get("/{doc_id}", response_model=Document)
+async def get_document(
+    doc_id: str,
+    store: DocumentStore = Depends(get_document_store),
+    principal: Principal = Depends(get_principal),
+) -> Document:
+    record = store.get(doc_id, principal.tenant_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return Document(**record)

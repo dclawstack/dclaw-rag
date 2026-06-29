@@ -2,6 +2,7 @@ from fastapi import Depends, Header, HTTPException, Request
 
 from app.db.api_key_store import ApiKeyStore
 from app.db.collection_store import CollectionStore
+from app.db.document_store import DocumentStore
 from app.db.qdrant_store import QdrantStore
 from app.generation.llm_gateway import LLMGateway, get_llm_gateway
 from app.ingestion.pipeline import IngestionPipeline
@@ -42,6 +43,12 @@ async def get_api_key_store(request: Request) -> ApiKeyStore:
     if not hasattr(request.app.state, "api_key_store"):
         request.app.state.api_key_store = ApiKeyStore()
     return request.app.state.api_key_store
+
+
+async def get_document_store(request: Request) -> DocumentStore:
+    if not hasattr(request.app.state, "document_store"):
+        request.app.state.document_store = DocumentStore()
+    return request.app.state.document_store
 
 
 class Principal:
