@@ -1,7 +1,11 @@
 from abc import ABC, abstractmethod
 
+import structlog
+
 from app.core.config import settings
 from app.core.exceptions import GenerationError
+
+logger = structlog.get_logger(__name__)
 
 
 class LLMGateway(ABC):
@@ -101,6 +105,13 @@ class FallbackGateway(LLMGateway):
         try:
             return await self.primary.complete(messages, temperature)
         except GenerationError as primary_exc:
+            # Warn loudly: otherwise a misconfig (e.g. a bad model id) silently
+            # masquerades as success while answers quietly come from the fallback.
+            logger.warning(
+                "llm_primary_failed_using_fallback",
+                error=str(primary_exc),
+                fallback=type(self.fallback).__name__,
+            )
             try:
                 return await self.fallback.complete(messages, temperature)
             except GenerationError as fallback_exc:
