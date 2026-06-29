@@ -116,6 +116,10 @@ dclaw-rag/
 4. **Verify:** `ruff check`, `mypy app/`, `pytest`, `cd frontend && npm run build && npm run lint`,
    and `docker compose config`.
 
+Deployment (images, env, probes, prod config validation) is documented in `DEPLOY.md`.
+`APP_ENV=production` makes the app validate its config on startup and refuse to boot if
+secrets/CORS/LLM-provider keys are missing (`validate_runtime_config`).
+
 ## Testing & quality gates
 - `pytest` from the repo root. Tests use `httpx.AsyncClient` + `ASGITransport` and override
   the `Depends(...)` providers (`tests/conftest.py`) — **no external services required**.

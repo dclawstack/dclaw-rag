@@ -63,3 +63,37 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Dev placeholders that must never reach production.
+_DEV_KEYS = {"sk_dev_bootstrap", "sk_admin_dev"}
+
+# API key required by the LLM provider (ollama is local, needs none).
+_PROVIDER_KEY = {
+    "openai": "openai_api_key",
+    "anthropic": "anthropic_api_key",
+    "openrouter": "openrouter_api_key",
+}
+
+
+def validate_runtime_config(s: Settings) -> list[str]:
+    """Return a list of misconfigurations that must block a production start.
+
+    Empty list means OK. Only enforced when app_env == 'production' (the caller
+    decides); in dev these are non-fatal conveniences.
+    """
+    problems: list[str] = []
+
+    if not s.admin_api_key:
+        problems.append("ADMIN_API_KEY is not set (key minting would be wide open)")
+    if s.admin_api_key in _DEV_KEYS or s.bootstrap_api_key in _DEV_KEYS:
+        problems.append("A dev placeholder API key is in use; set real secrets")
+    if "*" in s.cors_allow_origins:
+        problems.append("CORS_ALLOW_ORIGINS is a wildcard '*'")
+
+    key_field = _PROVIDER_KEY.get(s.llm_provider)
+    if key_field and not getattr(s, key_field):
+        problems.append(
+            f"LLM provider '{s.llm_provider}' selected but {key_field.upper()} is unset"
+        )
+
+    return problems
