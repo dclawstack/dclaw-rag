@@ -16,6 +16,7 @@ import {
   Search,
   Database,
 } from "lucide-react";
+import { GroundingBadge } from "@/components/grounding-badge";
 
 interface Citation {
   index: number;
@@ -27,6 +28,8 @@ interface Message {
   content: string;
   confidence?: "high" | "medium" | "low";
   citations?: Citation[];
+  abstained?: boolean;
+  faithfulness?: "grounded" | "partial" | "unsupported" | null;
 }
 
 const EXAMPLE_PROMPTS = [
@@ -66,6 +69,8 @@ export function Copilot() {
           content: res.answer,
           confidence: res.confidence,
           citations: res.citations?.map((c) => ({ index: c.index, source: c.source })),
+          abstained: res.abstained,
+          faithfulness: res.faithfulness,
         },
       ]);
     } catch {
@@ -142,6 +147,7 @@ export function Copilot() {
                 <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
                 {msg.role === "assistant" && msg.confidence && (
                   <div className="flex flex-wrap items-center gap-1 pt-1">
+                    <GroundingBadge abstained={msg.abstained} faithfulness={msg.faithfulness} />
                     <Badge variant="outline" className="text-[10px]">
                       {msg.confidence} confidence
                     </Badge>

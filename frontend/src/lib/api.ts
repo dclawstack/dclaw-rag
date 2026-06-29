@@ -26,6 +26,9 @@ export interface QueryResponse {
     page?: number;
   }>;
   confidence: "high" | "medium" | "low";
+  abstained?: boolean;
+  faithfulness?: "grounded" | "partial" | "unsupported" | null;
+  unsupported_claims?: string[];
   latency_ms: number;
 }
 
@@ -91,6 +94,7 @@ export async function queryRag(params: {
   question: string;
   top_k: number;
   collection_id?: string;
+  verify?: boolean;
 }): Promise<QueryResponse> {
   return apiFetch(`/api/v1/rag/query`, {
     method: "POST",

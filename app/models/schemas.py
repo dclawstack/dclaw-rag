@@ -53,6 +53,7 @@ class QueryRequest(BaseModel):
     tenant_id: str | None = None
     collection_id: str | None = None
     rewrite_query: bool = False
+    verify: bool = True
     filters: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -80,6 +81,9 @@ class QueryResponse(BaseModel):
     retrieved_chunks: list[RetrievedChunk]
     citations: list[Citation]
     confidence: str = "medium"
+    abstained: bool = False
+    faithfulness: str | None = None  # "grounded" | "partial" | "unsupported" | None
+    unsupported_claims: list[str] = Field(default_factory=list)
     latency_ms: float
 
 

@@ -21,6 +21,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Search, Send, Quote, BookOpen, ChevronRight, Sparkles, ListTree } from "lucide-react";
+import { GroundingBadge } from "@/components/grounding-badge";
 
 export default function QueryPage() {
   const [question, setQuestion] = useState("");
@@ -179,21 +180,40 @@ export default function QueryPage() {
                   <Quote className="w-4 h-4 text-primary" />
                   Answer
                 </CardTitle>
-                <Badge
-                  variant={
-                    result.confidence === "high"
-                      ? "default"
-                      : result.confidence === "medium"
-                      ? "secondary"
-                      : "outline"
-                  }
-                >
-                  {result.confidence} confidence
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <GroundingBadge
+                    abstained={(result as QueryResponse).abstained}
+                    faithfulness={(result as QueryResponse).faithfulness}
+                  />
+                  <Badge
+                    variant={
+                      result.confidence === "high"
+                        ? "default"
+                        : result.confidence === "medium"
+                        ? "secondary"
+                        : "outline"
+                    }
+                  >
+                    {result.confidence} confidence
+                  </Badge>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
               <p className="whitespace-pre-wrap leading-relaxed">{result.answer}</p>
+              {(result as QueryResponse).unsupported_claims &&
+                (result as QueryResponse).unsupported_claims!.length > 0 && (
+                  <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs">
+                    <p className="mb-1 font-medium text-amber-800">
+                      Claims not verified against the sources:
+                    </p>
+                    <ul className="list-disc space-y-1 pl-4 text-amber-700">
+                      {(result as QueryResponse).unsupported_claims!.map((c, i) => (
+                        <li key={i}>{c}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
             </CardContent>
           </Card>
 
