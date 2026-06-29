@@ -1,3 +1,4 @@
+from typing import Any
 from uuid import UUID
 
 from qdrant_client import QdrantClient
@@ -80,7 +81,7 @@ class QdrantStore:
 
     def _query(
         self,
-        query: object,
+        query: Any,
         using: str,
         top_k: int,
         filters: dict | None,
@@ -118,7 +119,7 @@ class QdrantStore:
         if not filters:
             return None
 
-        conditions: list[rest.FieldCondition] = []
+        conditions: list[Any] = []
         for key, value in filters.items():
             conditions.append(
                 rest.FieldCondition(

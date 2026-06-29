@@ -16,7 +16,7 @@ class Reranker:
         pairs = [(query, chunk.text) for chunk in chunks]
         scores = self.model.predict(pairs)
 
-        scored = list(zip(chunks, scores))
+        scored = list(zip(chunks, scores, strict=True))
         scored.sort(key=lambda x: x[1], reverse=True)
 
         top = scored[: self.top_k]

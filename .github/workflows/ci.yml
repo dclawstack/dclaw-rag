@@ -32,6 +32,17 @@ jobs:
         run: uv pip install --system torch torchvision --index-url https://download.pytorch.org/whl/cpu
       - name: Install dependencies
         run: uv pip install --system -e ".[dev]"
+      - name: Lint (ruff)
+        run: ruff check app/ tests/ scripts/
+      - name: Type-check (mypy)
+        run: mypy app/
+      - name: Security audit (pip-audit)
+        # setuptools<78.1.1 carries PYSEC-2025-49; torch pins <82, so bump into
+        # the safe window before auditing. The editable package and the local
+        # CPU torch wheels can't be resolved on PyPI and are skipped.
+        run: |
+          uv pip install --system "setuptools>=78.1.1,<82"
+          pip-audit --skip-editable
       - name: Run tests
         run: python -m pytest -v --tb=short
 
@@ -45,6 +56,9 @@ jobs:
       - name: Install dependencies
         working-directory: ./frontend
         run: npm ci
+      - name: Lint (eslint)
+        working-directory: ./frontend
+        run: npm run lint
       - name: Build
         working-directory: ./frontend
         env:

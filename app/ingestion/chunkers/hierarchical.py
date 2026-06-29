@@ -19,11 +19,10 @@ def hierarchical_chunk(
     chunks: list[DocumentChunk] = []
     parent_id = uuid4()
     parent_text = ""
-    child_index = 0
 
     words = text.split()
 
-    for i in range(0, len(words), child_size - overlap):
+    for child_index, i in enumerate(range(0, len(words), child_size - overlap)):
         child_words = words[i : i + child_size]
         child_text = " ".join(child_words)
 
@@ -45,7 +44,6 @@ def hierarchical_chunk(
             ),
         )
         chunks.append(chunk)
-        child_index += 1
 
         parent_text += " " + child_text
         if len(parent_text.split()) >= parent_size:

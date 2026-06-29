@@ -37,6 +37,7 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "ruff>=0.4.0",
     "mypy>=1.10.0",
+    "pip-audit>=2.7.0",
     "pre-commit>=3.7.0",
 ]
 
@@ -46,11 +47,16 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+# B008: function call in argument default is the FastAPI Depends/Header idiom.
+ignore = ["B008"]
 
 [tool.mypy]
+# A real type gate without strict-mode churn: catch genuine type errors
+# (bad args, missing returns) but don't require dict[...]-generics or ban Any.
 python_version = "3.11"
-strict = true
-warn_return_any = true
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_redundant_casts = true
 warn_unused_ignores = true
 
 [tool.hatch.build.targets.wheel]

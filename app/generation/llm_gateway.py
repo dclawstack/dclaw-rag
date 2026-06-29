@@ -34,7 +34,7 @@ class OpenAIGateway(LLMGateway):
         try:
             response = await self.client.chat.completions.create(
                 model=self.model,
-                messages=messages,
+                messages=messages,  # type: ignore[arg-type]  # plain dicts; OpenAI wants typed message params
                 temperature=temperature,
             )
             return response.choices[0].message.content or ""

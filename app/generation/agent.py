@@ -11,7 +11,7 @@ from app.generation.synthesis import (
     render_rag_prompt,
     to_retrieved_chunk,
 )
-from app.models.schemas import AgentStep, Citation, RetrievedChunk
+from app.models.schemas import AgentStep, Citation, DocumentChunk, RetrievedChunk
 from app.retrieval.search import Searcher
 
 PLAN_PROMPT_PATH = Path(__file__).parent / "prompts" / "agent_plan_v1.md"
@@ -46,7 +46,7 @@ class AgenticRAG:
         sub_questions = await self._plan(question, max_steps)
 
         steps: list[AgentStep] = []
-        collected: dict[str, object] = {}
+        collected: dict[str, DocumentChunk] = {}
         for sub_question in sub_questions:
             hits = self.searcher.search(sub_question, top_k=top_k, filters=filters)
             for chunk in hits:

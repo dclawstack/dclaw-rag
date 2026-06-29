@@ -5,7 +5,9 @@ from pydantic import BaseModel, Field
 
 class CitationOutput(BaseModel):
     answer: str = Field(..., description="The generated answer")
-    citations: list[int] = Field(default_factory=list, description="Indices of cited context chunks")
+    citations: list[int] = Field(
+        default_factory=list, description="Indices of cited context chunks"
+    )
     confidence: str = Field(default="medium", description="high | medium | low")
 
 

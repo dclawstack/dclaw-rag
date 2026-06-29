@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from app.api.dependencies import get_llm, get_searcher
@@ -18,7 +18,7 @@ def _chunk() -> DocumentChunk:
             chunk_index=0,
             source="r.md",
             title="R",
-            created_at=datetime.now(tz=timezone.utc),
+            created_at=datetime.now(tz=UTC),
         ),
     )
 

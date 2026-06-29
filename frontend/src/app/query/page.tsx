@@ -20,7 +20,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Search, Send, Quote, BookOpen, ChevronRight, Sparkles, ListTree } from "lucide-react";
+import { Send, Quote, BookOpen, ChevronRight, Sparkles, ListTree } from "lucide-react";
 import { GroundingBadge } from "@/components/grounding-badge";
 
 export default function QueryPage() {
