@@ -19,7 +19,7 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      APP_ENV: production
+      APP_ENV: dev
       QDRANT_URL: http://qdrant:6333
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
@@ -30,10 +30,11 @@ services:
       - qdrant
       - redis
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health/ready')"]
       interval: 30s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 40s
 
   worker:
     build:
@@ -41,7 +42,7 @@ services:
       dockerfile: Dockerfile
     command: ["celery", "-A", "app.worker.celery_app", "worker", "--queues", "ingestion", "--concurrency", "2"]
     environment:
-      APP_ENV: production
+      APP_ENV: dev
       QDRANT_URL: http://qdrant:6333
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1

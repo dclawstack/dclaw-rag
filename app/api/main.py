@@ -10,7 +10,7 @@ from app.api.middleware import (
     SecurityHeadersMiddleware,
 )
 from app.api.routes import agent, collections, health, ingest, keys, query, stats, system
-from app.core.config import settings
+from app.core.config import settings, validate_runtime_config
 from app.core.logging import configure_logging
 from app.db.api_key_store import ApiKeyStore
 
@@ -20,6 +20,14 @@ logger = structlog.get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Fail fast on an insecure/incomplete production configuration.
+    if settings.app_env == "production":
+        problems = validate_runtime_config(settings)
+        if problems:
+            for problem in problems:
+                logger.error("config_invalid", problem=problem)
+            raise RuntimeError("Invalid production configuration: " + "; ".join(problems))
+
     # Seed the bootstrap API key so the dev frontend has a working credential.
     if settings.bootstrap_api_key:
         try:
