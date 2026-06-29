@@ -12,14 +12,18 @@ class _FakeCollectionStore:
         self._data[collection_id] = record
         return record
 
-    def get(self, collection_id):
-        return self._data.get(collection_id)
+    def get(self, collection_id, tenant_id):
+        record = self._data.get(collection_id)
+        return record if record and record.get("tenant_id") == tenant_id else None
 
-    def list(self):
-        return list(self._data.values())
+    def list(self, tenant_id):
+        return [r for r in self._data.values() if r.get("tenant_id") == tenant_id]
 
-    def delete(self, collection_id):
-        return self._data.pop(collection_id, None) is not None
+    def delete(self, collection_id, tenant_id):
+        if self.get(collection_id, tenant_id) is None:
+            return False
+        del self._data[collection_id]
+        return True
 
 
 class _FakeQdrant:

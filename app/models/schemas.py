@@ -154,3 +154,14 @@ class Stats(BaseModel):
     collections: int
     documents: int
     chunks: int
+
+
+class ApiKeyCreate(BaseModel):
+    tenant_id: str
+    name: str = ""
+
+
+class ApiKeyResponse(BaseModel):
+    api_key: str
+    tenant_id: str
+    name: str

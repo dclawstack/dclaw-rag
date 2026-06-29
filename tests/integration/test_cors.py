@@ -3,7 +3,7 @@ async def test_cors_header_present_for_cross_origin_request(client):
     # otherwise the SPA's fetch() calls are blocked.
     resp = await client.get("/health", headers={"Origin": "http://localhost:3003"})
     assert resp.status_code == 200
-    assert resp.headers.get("access-control-allow-origin") == "*"
+    assert resp.headers.get("access-control-allow-origin") == "http://localhost:3003"
 
 
 async def test_cors_preflight_allows_post(client):
@@ -16,5 +16,5 @@ async def test_cors_preflight_allows_post(client):
         },
     )
     assert resp.status_code == 200
-    assert resp.headers.get("access-control-allow-origin") == "*"
+    assert resp.headers.get("access-control-allow-origin") == "http://localhost:3003"
     assert "POST" in resp.headers.get("access-control-allow-methods", "")

@@ -2,7 +2,7 @@ import time
 
 from fastapi import APIRouter, Depends
 
-from app.api.dependencies import get_llm, get_searcher
+from app.api.dependencies import Principal, get_llm, get_principal, get_searcher
 from app.generation.agent import AgenticRAG
 from app.generation.llm_gateway import LLMGateway
 from app.models.schemas import AgentRequest, AgentResponse
@@ -16,12 +16,12 @@ async def agent_query(
     request: AgentRequest,
     searcher: Searcher = Depends(get_searcher),
     llm: LLMGateway = Depends(get_llm),
+    principal: Principal = Depends(get_principal),
 ) -> AgentResponse:
     start = time.perf_counter()
 
     filters = request.filters.copy()
-    if request.tenant_id:
-        filters["tenant_id"] = request.tenant_id
+    filters["tenant_id"] = principal.tenant_id
     if request.collection_id:
         filters["collection_id"] = request.collection_id
 

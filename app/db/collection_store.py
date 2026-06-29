@@ -8,8 +8,8 @@ from app.core.config import settings
 class CollectionStore:
     """Persistent metadata store for collections, backed by Redis.
 
-    Collections are lightweight named groupings; the documents/chunks
-    themselves live in Qdrant and are associated via metadata.collection_id.
+    Every record carries a tenant_id; reads/deletes are scoped to a tenant so
+    one tenant cannot see or remove another's collections.
     """
 
     INDEX_KEY = "collections:index"
@@ -25,20 +25,27 @@ class CollectionStore:
         self._redis.sadd(self.INDEX_KEY, collection_id)
         return record
 
-    def get(self, collection_id: str) -> dict | None:
+    def get(self, collection_id: str, tenant_id: str) -> dict | None:
         raw = self._redis.get(self._key(collection_id))
-        return json.loads(raw) if raw else None
+        if not raw:
+            return None
+        record = json.loads(raw)
+        return record if record.get("tenant_id") == tenant_id else None
 
-    def list(self) -> list[dict]:
+    def list(self, tenant_id: str) -> list[dict]:
         records = []
         for collection_id in self._redis.smembers(self.INDEX_KEY):
             raw = self._redis.get(self._key(collection_id))
             if raw:
-                records.append(json.loads(raw))
+                record = json.loads(raw)
+                if record.get("tenant_id") == tenant_id:
+                    records.append(record)
         records.sort(key=lambda r: r.get("created_at", ""))
         return records
 
-    def delete(self, collection_id: str) -> bool:
-        existed = self._redis.delete(self._key(collection_id))
+    def delete(self, collection_id: str, tenant_id: str) -> bool:
+        if self.get(collection_id, tenant_id) is None:
+            return False
+        self._redis.delete(self._key(collection_id))
         self._redis.srem(self.INDEX_KEY, collection_id)
-        return bool(existed)
+        return True
