@@ -34,8 +34,11 @@ class _FakeQdrant:
     def count_points(self, filters=None):
         return self._chunk_count
 
-    def list_documents(self, filters=None, limit=1000):
-        return self._docs
+    def count_documents(self, filters=None):
+        return len(self._docs)
+
+    def list_documents(self, filters=None, limit=100, offset=0):
+        return self._docs[offset : offset + limit]
 
 
 def _use(store, qdrant):
@@ -104,3 +107,21 @@ async def test_documents_listing_for_existing_collection(client):
     body = resp.json()
     assert len(body) == 1
     assert body[0]["filename"] == "a.md"
+
+
+async def test_documents_listing_honors_limit_and_offset(client):
+    store = _FakeCollectionStore()
+    docs = [
+        {"id": f"d{i}", "filename": f"{i}.md", "status": "ready", "created_at": ""}
+        for i in range(5)
+    ]
+    _use(store, _FakeQdrant(chunk_count=10, docs=docs))
+
+    cid = (await client.post(BASE, json={"name": "Docs"})).json()["id"]
+
+    page = (await client.get(f"{BASE}/{cid}/documents?limit=2&offset=2")).json()
+    assert [d["id"] for d in page] == ["d2", "d3"]
+
+    # out-of-range params are rejected (bounded page size)
+    assert (await client.get(f"{BASE}/{cid}/documents?limit=0")).status_code == 422
+    assert (await client.get(f"{BASE}/{cid}/documents?limit=999")).status_code == 422
