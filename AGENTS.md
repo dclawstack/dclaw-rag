@@ -46,6 +46,11 @@ questions and get cited, LLM-synthesized answers.
   tenant on every `/api/v1/rag/*` route; per-tenant rate limit on query/agent/ingest (429 +
   `Retry-After`); request-body and upload size caps (413); security headers on every
   response; request schemas carry length/range bounds. Limits live in `settings`.
+- **Observability** (`app/api/middleware.py`, `app/core/metrics.py`): every request gets an
+  `X-Request-ID` (echoed if supplied) bound into a structured access log (method, path,
+  status, duration). Prometheus at **`GET /metrics`** (HTTP counter/histogram + RAG query/
+  ingest counters); the query route logs per-stage (retrieval/generation) latency.
+  **`GET /health/ready`** checks Redis + Qdrant (503 if down); `GET /health` is liveness.
 - **Logging:** `structlog` (`app/core/logging.py`) — no `print()`, and never log key values.
 
 ### Frontend (`frontend/`)

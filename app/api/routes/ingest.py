@@ -12,6 +12,7 @@ from app.api.dependencies import (
     get_document_store,
     get_principal,
 )
+from app.core import metrics
 from app.core.config import settings
 from app.core.exceptions import IngestionError
 from app.db.document_store import DocumentStore
@@ -79,6 +80,7 @@ def _enqueue(text: str, request: IngestRequest, store: DocumentStore) -> IngestR
         }
     )
     ingest_document_task.delay(str(doc_id), text, request.model_dump(mode="json"))
+    metrics.INGEST_ENQUEUED.inc()
     return IngestResponse(doc_id=doc_id, chunks_inserted=0, status="pending")
 
 
