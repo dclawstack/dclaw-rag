@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     reranker_model: str = "BAAI/bge-reranker-base"
     reranker_top_k: int = 10
 
+    # Trust controls: abstain when the top reranked chunk scores below this
+    # (cross-encoder relevance in [0,1]; relevant hits score ~0.7-1.0, irrelevant
+    # ~0.0), and verify answers against their sources.
+    abstain_threshold: float = 0.2
+    verify_answers: bool = True
+
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
 
