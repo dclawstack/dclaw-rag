@@ -4,6 +4,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware
 from app.api.routes import agent, collections, health, ingest, keys, query, stats, system
 from app.core.config import settings
 from app.core.logging import configure_logging
@@ -40,6 +41,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(BodySizeLimitMiddleware)
 
 app.include_router(health.router, tags=["Health"])
 app.include_router(system.router, prefix="/api/v1/rag", tags=["System"])

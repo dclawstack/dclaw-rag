@@ -2,7 +2,13 @@ import time
 
 from fastapi import APIRouter, Depends
 
-from app.api.dependencies import Principal, get_llm, get_principal, get_searcher
+from app.api.dependencies import (
+    Principal,
+    enforce_rate_limit,
+    get_llm,
+    get_principal,
+    get_searcher,
+)
 from app.generation.agent import AgenticRAG
 from app.generation.llm_gateway import LLMGateway
 from app.models.schemas import AgentRequest, AgentResponse
@@ -11,7 +17,9 @@ from app.retrieval.search import Searcher
 router = APIRouter()
 
 
-@router.post("/agent", response_model=AgentResponse)
+@router.post(
+    "/agent", response_model=AgentResponse, dependencies=[Depends(enforce_rate_limit)]
+)
 async def agent_query(
     request: AgentRequest,
     searcher: Searcher = Depends(get_searcher),

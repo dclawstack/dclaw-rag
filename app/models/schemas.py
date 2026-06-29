@@ -43,13 +43,13 @@ class IngestResponse(BaseModel):
 
 
 class TextIngestRequest(BaseModel):
-    text: str
+    text: str = Field(..., min_length=1, max_length=2_000_000)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class QueryRequest(BaseModel):
-    question: str
-    top_k: int = 10
+    question: str = Field(..., min_length=1, max_length=8000)
+    top_k: int = Field(default=10, ge=1, le=100)
     tenant_id: str | None = None
     collection_id: str | None = None
     verify: bool = True
@@ -87,9 +87,9 @@ class QueryResponse(BaseModel):
 
 
 class AgentRequest(BaseModel):
-    question: str
-    top_k: int = 5
-    max_steps: int = 4
+    question: str = Field(..., min_length=1, max_length=8000)
+    top_k: int = Field(default=5, ge=1, le=100)
+    max_steps: int = Field(default=4, ge=1, le=10)
     tenant_id: str | None = None
     collection_id: str | None = None
     filters: dict[str, Any] = Field(default_factory=dict)
@@ -111,8 +111,8 @@ class AgentResponse(BaseModel):
 
 
 class CollectionCreate(BaseModel):
-    name: str
-    description: str | None = None
+    name: str = Field(..., min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
     tags: list[str] = Field(default_factory=list)
 
 

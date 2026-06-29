@@ -4,6 +4,7 @@ from app.db.api_key_store import ApiKeyStore
 from app.db.collection_store import CollectionStore
 from app.db.document_store import DocumentStore
 from app.db.qdrant_store import QdrantStore
+from app.db.rate_limiter import RateLimiter
 from app.generation.llm_gateway import LLMGateway, get_llm_gateway
 from app.ingestion.pipeline import IngestionPipeline
 from app.retrieval.search import Searcher
@@ -75,3 +76,23 @@ async def get_principal(
     if not record:
         raise HTTPException(status_code=401, detail="Invalid API key")
     return Principal(tenant_id=record["tenant_id"], key_name=record.get("name", ""))
+
+
+async def get_rate_limiter(request: Request) -> RateLimiter:
+    if not hasattr(request.app.state, "rate_limiter"):
+        request.app.state.rate_limiter = RateLimiter()
+    return request.app.state.rate_limiter
+
+
+async def enforce_rate_limit(
+    principal: Principal = Depends(get_principal),
+    limiter: RateLimiter = Depends(get_rate_limiter),
+) -> None:
+    """Guard dependency: 429s the tenant when over the per-minute limit."""
+    allowed, retry_after = limiter.check(principal.tenant_id)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded",
+            headers={"Retry-After": str(retry_after)},
+        )

@@ -6,7 +6,13 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
-from app.api.dependencies import Principal, get_document_store, get_principal
+from app.api.dependencies import (
+    Principal,
+    enforce_rate_limit,
+    get_document_store,
+    get_principal,
+)
+from app.core.config import settings
 from app.core.exceptions import IngestionError
 from app.db.document_store import DocumentStore
 from app.ingestion.pipeline import checksum, extract_file_text
@@ -76,7 +82,9 @@ def _enqueue(text: str, request: IngestRequest, store: DocumentStore) -> IngestR
     return IngestResponse(doc_id=doc_id, chunks_inserted=0, status="pending")
 
 
-@router.post("/upload", response_model=IngestResponse)
+@router.post(
+    "/upload", response_model=IngestResponse, dependencies=[Depends(enforce_rate_limit)]
+)
 async def upload_document(
     file: UploadFile = File(...),
     metadata: str = Form("{}"),
@@ -88,6 +96,11 @@ async def upload_document(
 
     suffix = Path(file.filename).suffix
     contents = await file.read()
+    if len(contents) > settings.max_upload_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds the {settings.max_upload_bytes} byte limit",
+        )
 
     with NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         tmp.write(contents)
@@ -104,7 +117,9 @@ async def upload_document(
     return _enqueue(text, request, store)
 
 
-@router.post("/text", response_model=IngestResponse)
+@router.post(
+    "/text", response_model=IngestResponse, dependencies=[Depends(enforce_rate_limit)]
+)
 async def ingest_text(
     body: TextIngestRequest,
     store: DocumentStore = Depends(get_document_store),

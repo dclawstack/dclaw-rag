@@ -42,7 +42,11 @@ questions and get cited, LLM-synthesized answers.
   Supported formats live in `app/ingestion/extractors/` + the `loaders` registry (PDF,
   DOCX, HTML, CSV/TSV, Markdown, plaintext).
 - **Generation** (`app/generation/`): `LLMGateway` (OpenAI / Anthropic) + Jinja prompt.
-- **Logging:** `structlog` (`app/core/logging.py`) — no `print()`.
+- **Security/abuse** (`app/api/middleware.py`, `app/db/rate_limiter.py`): API-key auth →
+  tenant on every `/api/v1/rag/*` route; per-tenant rate limit on query/agent/ingest (429 +
+  `Retry-After`); request-body and upload size caps (413); security headers on every
+  response; request schemas carry length/range bounds. Limits live in `settings`.
+- **Logging:** `structlog` (`app/core/logging.py`) — no `print()`, and never log key values.
 
 ### Frontend (`frontend/`)
 - **Next.js 14+ App Router**, **Tailwind**, pre-built UI components in
