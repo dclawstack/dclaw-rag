@@ -124,6 +124,30 @@ def test_get_llm_gateway_ollama_provider_is_not_wrapped(monkeypatch):
     assert isinstance(gateway, OllamaGateway)
 
 
+def test_get_llm_gateway_openrouter_builds_openai_client_with_base_url(monkeypatch):
+    captured = {}
+
+    class _StubOpenAI(LLMGateway):
+        def __init__(self, api_key=None, base_url=None, model=None):
+            captured.update(api_key=api_key, base_url=base_url, model=model)
+
+        async def complete(self, messages, temperature=0.2):
+            return ""
+
+    monkeypatch.setattr(llm_gateway.settings, "llm_provider", "openrouter")
+    monkeypatch.setattr(llm_gateway.settings, "openrouter_api_key", "sk-or-test")
+    monkeypatch.setattr(llm_gateway.settings, "openrouter_model", "openai/gpt-4o-mini")
+    monkeypatch.setattr(llm_gateway.settings, "llm_fallback_to_ollama", False)
+    monkeypatch.setattr(llm_gateway, "OpenAIGateway", _StubOpenAI)
+
+    gateway = get_llm_gateway()
+
+    assert isinstance(gateway, _StubOpenAI)
+    assert captured["api_key"] == "sk-or-test"
+    assert captured["base_url"] == llm_gateway.settings.openrouter_base_url
+    assert captured["model"] == "openai/gpt-4o-mini"
+
+
 def test_get_llm_gateway_fallback_disabled(monkeypatch):
     monkeypatch.setattr(llm_gateway.settings, "llm_provider", "anthropic")
     monkeypatch.setattr(llm_gateway, "AnthropicGateway", _OkGateway)

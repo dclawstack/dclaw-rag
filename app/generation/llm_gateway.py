@@ -11,11 +11,20 @@ class LLMGateway(ABC):
 
 
 class OpenAIGateway(LLMGateway):
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        model: str | None = None,
+    ) -> None:
         import openai
 
-        self.client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
-        self.model = settings.llm_model
+        # base_url defaults to OpenAI; pass an OpenAI-compatible URL (e.g. OpenRouter).
+        self.client = openai.AsyncOpenAI(
+            api_key=api_key or settings.openai_api_key,
+            base_url=base_url,
+        )
+        self.model = model or settings.llm_model
 
     async def complete(self, messages: list[dict], temperature: float = 0.2) -> str:
         try:
@@ -103,6 +112,12 @@ class FallbackGateway(LLMGateway):
 def _build_gateway(provider: str) -> LLMGateway:
     if provider == "openai":
         return OpenAIGateway()
+    if provider == "openrouter":
+        return OpenAIGateway(
+            api_key=settings.openrouter_api_key,
+            base_url=settings.openrouter_base_url,
+            model=settings.openrouter_model,
+        )
     if provider == "anthropic":
         return AnthropicGateway()
     if provider == "ollama":
