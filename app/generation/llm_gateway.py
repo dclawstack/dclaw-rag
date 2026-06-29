@@ -1,7 +1,11 @@
 from abc import ABC, abstractmethod
 
+import structlog
+
 from app.core.config import settings
 from app.core.exceptions import GenerationError
+
+logger = structlog.get_logger(__name__)
 
 
 class LLMGateway(ABC):
@@ -11,11 +15,20 @@ class LLMGateway(ABC):
 
 
 class OpenAIGateway(LLMGateway):
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        model: str | None = None,
+    ) -> None:
         import openai
 
-        self.client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
-        self.model = settings.llm_model
+        # base_url defaults to OpenAI; pass an OpenAI-compatible URL (e.g. OpenRouter).
+        self.client = openai.AsyncOpenAI(
+            api_key=api_key or settings.openai_api_key,
+            base_url=base_url,
+        )
+        self.model = model or settings.llm_model
 
     async def complete(self, messages: list[dict], temperature: float = 0.2) -> str:
         try:
@@ -92,6 +105,13 @@ class FallbackGateway(LLMGateway):
         try:
             return await self.primary.complete(messages, temperature)
         except GenerationError as primary_exc:
+            # Warn loudly: otherwise a misconfig (e.g. a bad model id) silently
+            # masquerades as success while answers quietly come from the fallback.
+            logger.warning(
+                "llm_primary_failed_using_fallback",
+                error=str(primary_exc),
+                fallback=type(self.fallback).__name__,
+            )
             try:
                 return await self.fallback.complete(messages, temperature)
             except GenerationError as fallback_exc:
@@ -103,6 +123,12 @@ class FallbackGateway(LLMGateway):
 def _build_gateway(provider: str) -> LLMGateway:
     if provider == "openai":
         return OpenAIGateway()
+    if provider == "openrouter":
+        return OpenAIGateway(
+            api_key=settings.openrouter_api_key,
+            base_url=settings.openrouter_base_url,
+            model=settings.openrouter_model,
+        )
     if provider == "anthropic":
         return AnthropicGateway()
     if provider == "ollama":
