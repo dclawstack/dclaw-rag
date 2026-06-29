@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -6,7 +6,7 @@ from app.core.exceptions import IngestionError
 from app.db.qdrant_store import QdrantStore
 from app.ingestion.chunkers.hierarchical import hierarchical_chunk
 from app.ingestion.loaders import get_extractor
-from app.models.schemas import ChunkMetadata, DocumentChunk, IngestRequest
+from app.models.schemas import ChunkMetadata, IngestRequest
 from app.retrieval.embedder import Embedder, SparseEmbedder
 
 
@@ -29,7 +29,7 @@ class IngestionPipeline:
             chunk_index=0,
             source=request.source,
             title=request.title or file_path.name,
-            created_at=datetime.now(tz=timezone.utc),
+            created_at=datetime.now(tz=UTC),
             tags=request.tags,
             checksum=None,
             tenant_id=request.tenant_id,
@@ -50,7 +50,7 @@ class IngestionPipeline:
             chunk_index=0,
             source=request.source,
             title=request.title,
-            created_at=datetime.now(tz=timezone.utc),
+            created_at=datetime.now(tz=UTC),
             tags=request.tags,
             checksum=None,
             tenant_id=request.tenant_id,

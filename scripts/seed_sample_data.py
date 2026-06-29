@@ -127,7 +127,10 @@ def main(api_url: str, api_key: str) -> None:
     print('    -d \'{"question":"What was Acme\\u2019s Q3 2026 revenue?","top_k":5}\'')
     print(f"  curl -X POST {base}/agent -H 'Content-Type: application/json' \\")
     print('    -d \'{"question":"How did Acme revenue change from Q1 to Q3 2026?","max_steps":3}\'')
-    print("Or open the UI at http://localhost:3003 and select the 'Sample Knowledge Base' collection.")
+    print(
+        "Or open the UI at http://localhost:3003 and select "
+        "the 'Sample Knowledge Base' collection."
+    )
 
 
 if __name__ == "__main__":

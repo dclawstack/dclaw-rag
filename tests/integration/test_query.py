@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.api.dependencies import get_llm, get_searcher
@@ -18,7 +18,7 @@ def _fake_chunk(text: str = "Q3 revenue was $5M.", title: str = "Report") -> Doc
             chunk_index=0,
             source="report.md",
             title=title,
-            created_at=datetime.now(tz=timezone.utc),
+            created_at=datetime.now(tz=UTC),
         ),
     )
 

@@ -3,6 +3,12 @@ import { API_BASE, API_KEY } from "./tokens";
 const authHeaders = (): Record<string, string> =>
   API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {};
 
+export interface ChunkMetadata {
+  source?: string;
+  title?: string;
+  [key: string]: string | number | boolean | null | undefined;
+}
+
 export interface QueryResponse {
   query: string;
   answer: string;
@@ -11,7 +17,7 @@ export interface QueryResponse {
     score: number;
     text: string;
     document_name: string;
-    metadata: Record<string, any>;
+    metadata: ChunkMetadata;
   }>;
   retrieved_chunks: Array<{
     id: string;
@@ -19,7 +25,7 @@ export interface QueryResponse {
     score: number;
     text: string;
     document_name: string;
-    metadata: Record<string, any>;
+    metadata: ChunkMetadata;
   }>;
   citations: Array<{
     index: number;
@@ -135,7 +141,7 @@ export async function agentQuery(params: {
 
 export async function ingestFile(
   file: File,
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 ) {
   const formData = new FormData();
   formData.append("file", file);
@@ -155,7 +161,7 @@ export async function ingestFile(
 
 export async function ingestText(
   text: string,
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 ) {
   return apiFetch(`/api/v1/rag/documents/text`, {
     method: "POST",

@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -34,13 +35,13 @@ async def create_collection(
     collections: CollectionStore = Depends(get_collection_store),
     principal: Principal = Depends(get_principal),
 ) -> Collection:
-    record = {
+    record: dict[str, Any] = {
         "id": uuid4().hex,
         "name": body.name,
         "description": body.description,
         "tags": body.tags,
         "status": "ready",
-        "created_at": datetime.now(tz=timezone.utc).isoformat(),
+        "created_at": datetime.now(tz=UTC).isoformat(),
         "tenant_id": principal.tenant_id,
     }
     collections.create(record["id"], record)

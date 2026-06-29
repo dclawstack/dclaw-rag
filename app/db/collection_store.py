@@ -35,7 +35,7 @@ class CollectionStore:
     def list(self, tenant_id: str) -> list[dict]:
         records = []
         for collection_id in self._redis.smembers(self.INDEX_KEY):
-            raw = self._redis.get(self._key(collection_id))
+            raw = self._redis.get(self._key(str(collection_id)))
             if raw:
                 record = json.loads(raw)
                 if record.get("tenant_id") == tenant_id:

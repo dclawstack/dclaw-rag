@@ -28,7 +28,7 @@ class Embedder:
     def embed_chunks(self, chunks: list[DocumentChunk]) -> list[DocumentChunk]:
         texts = [c.text for c in chunks]
         embeddings = self.embed(texts)
-        for chunk, emb in zip(chunks, embeddings):
+        for chunk, emb in zip(chunks, embeddings, strict=True):
             chunk.embedding = emb
         return chunks
 
@@ -48,7 +48,7 @@ class SparseEmbedder:
 
     def embed_chunks(self, chunks: list[DocumentChunk]) -> list[DocumentChunk]:
         texts = [c.text for c in chunks]
-        for chunk, emb in zip(chunks, self.model.embed(texts)):
+        for chunk, emb in zip(chunks, self.model.embed(texts), strict=True):
             chunk.sparse_embedding = {
                 "indices": emb.indices.tolist(),
                 "values": emb.values.tolist(),

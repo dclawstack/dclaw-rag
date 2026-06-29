@@ -10,13 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -62,6 +56,8 @@ export default function CollectionsPage() {
   }
 
   useEffect(() => {
+    // Intentional data fetch on mount; the synchronous setLoading is expected here.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadCollections();
   }, []);
 
