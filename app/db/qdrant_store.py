@@ -164,16 +164,3 @@ class QdrantStore:
             if offset is None:
                 break
         return list(docs.values())
-
-    def delete_by_doc_id(self, doc_id: UUID) -> None:
-        self.client.delete(
-            collection_name=self.collection,
-            points_selector=rest.Filter(
-                must=[
-                    rest.FieldCondition(
-                        key="metadata.doc_id",
-                        match=rest.MatchValue(value=str(doc_id)),
-                    )
-                ]
-            ),
-        )
