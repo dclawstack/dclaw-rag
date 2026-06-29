@@ -1,4 +1,7 @@
-import { API_BASE } from "./tokens";
+import { API_BASE, API_KEY } from "./tokens";
+
+const authHeaders = (): Record<string, string> =>
+  API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {};
 
 export interface QueryResponse {
   query: string;
@@ -55,6 +58,7 @@ async function apiFetch(path: string, options?: RequestInit) {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders(),
       ...options?.headers,
     },
   });
@@ -142,6 +146,7 @@ export async function ingestFile(
     {
       method: "POST",
       body: formData,
+      headers: authHeaders(),
     }
   );
   if (!res.ok) throw new Error(`Upload error: ${res.status}`);

@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.api.dependencies import Principal, get_principal
 from app.core.config import settings
 from app.models.schemas import SystemInfo
 
@@ -7,7 +8,7 @@ router = APIRouter()
 
 
 @router.get("/system", response_model=SystemInfo)
-async def system_info() -> SystemInfo:
+async def system_info(principal: Principal = Depends(get_principal)) -> SystemInfo:
     provider = settings.llm_provider.lower()
     if provider == "ollama":
         llm_model = settings.ollama_model

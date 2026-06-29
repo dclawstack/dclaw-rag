@@ -11,9 +11,12 @@ Usage:
 
 import argparse
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
+
+_API_KEY = ""
 
 COLLECTION = {
     "name": "Sample Knowledge Base",
@@ -74,12 +77,16 @@ DOCUMENTS = [
 def _request(url: str, payload: dict | None = None, method: str = "GET") -> dict:
     data = json.dumps(payload).encode() if payload is not None else None
     headers = {"Content-Type": "application/json"} if data else {}
+    if _API_KEY:
+        headers["Authorization"] = f"Bearer {_API_KEY}"
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     with urllib.request.urlopen(req, timeout=600) as resp:
         return json.loads(resp.read())
 
 
-def main(api_url: str) -> None:
+def main(api_url: str, api_key: str) -> None:
+    global _API_KEY
+    _API_KEY = api_key
     api_url = api_url.rstrip("/")
     base = f"{api_url}/api/v1/rag"
 
@@ -130,5 +137,10 @@ if __name__ == "__main__":
         default="http://localhost:8090",
         help="Base URL of the running backend (default: http://localhost:8090)",
     )
+    parser.add_argument(
+        "--api-key",
+        default=os.environ.get("DCLAW_API_KEY", ""),
+        help="API key (or set DCLAW_API_KEY); required since auth is enabled.",
+    )
     args = parser.parse_args()
-    main(args.api_url)
+    main(args.api_url, args.api_key)

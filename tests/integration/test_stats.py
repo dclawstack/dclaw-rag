@@ -3,7 +3,7 @@ from app.api.main import app
 
 
 class _FakeCollectionStore:
-    def list(self):
+    def list(self, tenant_id):
         return [{"id": "a"}, {"id": "b"}]
 
 

@@ -8,7 +8,13 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8090
 
-    cors_allow_origins: list[str] = ["*"]
+    cors_allow_origins: list[str] = ["http://localhost:3003"]
+
+    # Auth: API key -> tenant. bootstrap_api_key is seeded on startup (used by the
+    # dev frontend); admin_api_key is required to mint new tenant keys.
+    bootstrap_api_key: str | None = None
+    bootstrap_tenant: str = "default"
+    admin_api_key: str | None = None
 
     embedding_model: str = "BAAI/bge-large-en-v1.5"
     embedding_device: str = "cpu"

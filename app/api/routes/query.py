@@ -2,7 +2,7 @@ import time
 
 from fastapi import APIRouter, Depends
 
-from app.api.dependencies import get_llm, get_searcher
+from app.api.dependencies import Principal, get_llm, get_principal, get_searcher
 from app.core.config import settings
 from app.generation.llm_gateway import LLMGateway
 from app.generation.synthesis import (
@@ -28,12 +28,13 @@ async def query(
     request: QueryRequest,
     searcher: Searcher = Depends(get_searcher),
     llm: LLMGateway = Depends(get_llm),
+    principal: Principal = Depends(get_principal),
 ) -> QueryResponse:
     start = time.perf_counter()
 
+    # tenant comes from the authenticated principal, never the request body
     filters = request.filters.copy()
-    if request.tenant_id:
-        filters["tenant_id"] = request.tenant_id
+    filters["tenant_id"] = principal.tenant_id
     if request.collection_id:
         filters["collection_id"] = request.collection_id
 

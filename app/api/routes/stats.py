@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from app.api.dependencies import get_collection_store, get_store
+from app.api.dependencies import Principal, get_collection_store, get_principal, get_store
 from app.db.collection_store import CollectionStore
 from app.db.qdrant_store import QdrantStore
 from app.models.schemas import Stats
@@ -12,9 +12,11 @@ router = APIRouter()
 async def stats(
     collections: CollectionStore = Depends(get_collection_store),
     store: QdrantStore = Depends(get_store),
+    principal: Principal = Depends(get_principal),
 ) -> Stats:
+    tenant_filter = {"tenant_id": principal.tenant_id}
     return Stats(
-        collections=len(collections.list()),
-        documents=len(store.list_documents()),
-        chunks=store.count_points(),
+        collections=len(collections.list(principal.tenant_id)),
+        documents=len(store.list_documents(tenant_filter)),
+        chunks=store.count_points(tenant_filter),
     )
