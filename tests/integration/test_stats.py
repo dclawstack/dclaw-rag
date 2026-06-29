@@ -1,4 +1,8 @@
-from app.api.dependencies import get_collection_store, get_store
+from app.api.dependencies import (
+    get_collection_store,
+    get_document_store,
+    get_store,
+)
 from app.api.main import app
 
 
@@ -7,16 +11,19 @@ class _FakeCollectionStore:
         return [{"id": "a"}, {"id": "b"}]
 
 
-class _FakeQdrant:
-    def count_documents(self, filters=None):
+class _FakeDocStore:
+    def count(self, tenant_id, collection_id=None):
         return 3
 
+
+class _FakeQdrant:
     def count_points(self, filters=None):
         return 9
 
 
 async def test_stats_counts(client):
     app.dependency_overrides[get_collection_store] = lambda: _FakeCollectionStore()
+    app.dependency_overrides[get_document_store] = lambda: _FakeDocStore()
     app.dependency_overrides[get_store] = lambda: _FakeQdrant()
 
     resp = await client.get("/api/v1/rag/stats")

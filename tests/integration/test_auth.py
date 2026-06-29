@@ -1,10 +1,9 @@
-from uuid import uuid4
-
+import app.api.routes.ingest as ingest_module
 from app.api.dependencies import (
     Principal,
     get_api_key_store,
     get_collection_store,
-    get_pipeline,
+    get_document_store,
     get_principal,
     get_store,
 )
@@ -105,17 +104,17 @@ class _Qdrant:
     def count_points(self, filters=None):
         return 0
 
-    def count_documents(self, filters=None):
-        return 0
 
-    def list_documents(self, filters=None, limit=100, offset=0):
-        return []
+class _DocStore:
+    def count(self, tenant_id, collection_id=None):
+        return 0
 
 
 async def test_tenant_cannot_see_or_delete_another_tenants_collection(client):
     store = _ColStore()
     app.dependency_overrides[get_collection_store] = lambda: store
     app.dependency_overrides[get_store] = lambda: _Qdrant()
+    app.dependency_overrides[get_document_store] = lambda: _DocStore()
 
     app.dependency_overrides[get_principal] = lambda: Principal(tenant_id="A")
     created = (await client.post("/api/v1/rag/collections", json={"name": "A-secret"})).json()
@@ -128,18 +127,25 @@ async def test_tenant_cannot_see_or_delete_another_tenants_collection(client):
 # --- client cannot spoof tenant on ingest ---
 
 
-class _CapturingPipeline:
+class _CapturingDocStore:
     def __init__(self):
-        self.request = None
+        self.record = None
 
-    def ingest_text(self, text, request):
-        self.request = request
-        return uuid4(), 1
+    def find_by_checksum(self, tenant_id, checksum):
+        return None
+
+    def create(self, record):
+        self.record = record
+        return record
 
 
-async def test_client_supplied_tenant_id_is_ignored(client):
-    pipeline = _CapturingPipeline()
-    app.dependency_overrides[get_pipeline] = lambda: pipeline
+async def test_client_supplied_tenant_id_is_ignored(client, monkeypatch):
+    docs = _CapturingDocStore()
+    enqueued = []
+    monkeypatch.setattr(
+        ingest_module.ingest_document_task, "delay", lambda *a, **k: enqueued.append(a)
+    )
+    app.dependency_overrides[get_document_store] = lambda: docs
     app.dependency_overrides[get_principal] = lambda: Principal(tenant_id="real-tenant")
 
     resp = await client.post(
@@ -148,4 +154,6 @@ async def test_client_supplied_tenant_id_is_ignored(client):
     )
 
     assert resp.status_code == 200
-    assert pipeline.request.tenant_id == "real-tenant"  # principal wins over the body
+    # the registered doc and the enqueued task both carry the principal's tenant
+    assert docs.record["tenant_id"] == "real-tenant"
+    assert enqueued[0][2]["tenant_id"] == "real-tenant"

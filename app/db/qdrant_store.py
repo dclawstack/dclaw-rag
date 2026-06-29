@@ -9,13 +9,9 @@ from app.core.config import settings
 from app.core.exceptions import RetrievalError
 from app.models.schemas import ChunkMetadata, DocumentChunk
 
-# Payload fields we filter/group by; indexing them keeps tenant/collection/doc
-# queries off a full collection scan.
+# Payload fields we filter by; indexing them keeps tenant/collection/doc queries
+# off a full collection scan.
 INDEXED_FIELDS = ("tenant_id", "collection_id", "doc_id")
-
-# Upper bound on distinct documents we count or paginate over per filter via the
-# doc_id facet. Beyond this, counts/listings are capped (see Phase 5 registry).
-DOC_FACET_CAP = 10_000
 
 
 class QdrantStore:
@@ -158,68 +154,3 @@ class QdrantStore:
             exact=True,
         )
         return result.count
-
-    def _facet_doc_ids(self, filters: dict | None) -> list[str]:
-        """Distinct doc_ids matching the filter, via a facet over the indexed
-        doc_id field — no full scan. Bounded at DOC_FACET_CAP distinct docs."""
-        result = self.client.facet(
-            collection_name=self.collection,
-            key="metadata.doc_id",
-            facet_filter=self._build_filter(filters),
-            limit=DOC_FACET_CAP,
-            exact=True,
-        )
-        return [str(hit.value) for hit in result.hits]
-
-    def count_documents(self, filters: dict | None = None) -> int:
-        """Count distinct documents (by doc_id) matching the filter."""
-        return len(self._facet_doc_ids(filters))
-
-    def list_documents(
-        self, filters: dict | None = None, limit: int = 100, offset: int = 0
-    ) -> list[dict]:
-        """Return a page of distinct documents (deduped by doc_id) matching the
-        filter. Document ids come from the doc_id facet (indexed); only the page's
-        metadata is then fetched, so work is bounded by the page, not the corpus."""
-        page_ids = self._facet_doc_ids(filters)[offset : offset + limit]
-        if not page_ids:
-            return []
-
-        scroll_filter = rest.Filter(
-            must=[
-                *self._filter_conditions(filters),
-                rest.FieldCondition(
-                    key="metadata.doc_id", match=rest.MatchAny(any=page_ids)
-                ),
-            ]
-        )
-
-        # Fetch metadata for just this page's docs; stop once each is seen once.
-        remaining = set(page_ids)
-        meta_by_doc: dict[str, dict] = {}
-        cursor = None
-        while remaining:
-            points, cursor = self.client.scroll(
-                collection_name=self.collection,
-                scroll_filter=scroll_filter,
-                with_payload=True,
-                with_vectors=False,
-                limit=256,
-                offset=cursor,
-            )
-            for point in points:
-                meta = (point.payload or {}).get("metadata", {})
-                doc_id = meta.get("doc_id")
-                if doc_id in remaining:
-                    meta_by_doc[doc_id] = {
-                        "id": doc_id,
-                        "filename": meta.get("title") or meta.get("source") or doc_id,
-                        "status": "ready",
-                        "created_at": meta.get("created_at") or "",
-                    }
-                    remaining.discard(doc_id)
-            if cursor is None:
-                break
-
-        # Preserve facet order for a stable page.
-        return [meta_by_doc[doc_id] for doc_id in page_ids if doc_id in meta_by_doc]

@@ -132,6 +132,8 @@ class Document(BaseModel):
     filename: str
     status: str = "ready"
     created_at: str = ""
+    chunk_count: int = 0
+    error: str | None = None
 
 
 class HealthResponse(BaseModel):

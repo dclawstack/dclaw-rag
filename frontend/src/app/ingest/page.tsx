@@ -64,8 +64,8 @@ export default function IngestPage() {
         collection_id: collectionId || undefined,
       });
       setProgress(100);
-      toast.success("File ingested", {
-        description: `Document ${res.doc_id} created with ${res.chunks_inserted} chunks`,
+      toast.success("Document queued", {
+        description: `Document ${res.doc_id} is ${res.status} — processing in the background`,
       });
       setFile(null);
       setTitle("");
@@ -92,8 +92,8 @@ export default function IngestPage() {
         collection_id: collectionId || undefined,
       });
       setProgress(100);
-      toast.success("Text ingested", {
-        description: `Document ${res.doc_id} created with ${res.chunks_inserted} chunks`,
+      toast.success("Document queued", {
+        description: `Document ${res.doc_id} is ${res.status} — processing in the background`,
       });
       setText("");
       setTitle("");
