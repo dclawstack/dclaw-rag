@@ -1,3 +1,4 @@
+import contextlib
 from typing import Any
 from uuid import UUID
 
@@ -8,6 +9,14 @@ from app.core.config import settings
 from app.core.exceptions import RetrievalError
 from app.models.schemas import ChunkMetadata, DocumentChunk
 
+# Payload fields we filter/group by; indexing them keeps tenant/collection/doc
+# queries off a full collection scan.
+INDEXED_FIELDS = ("tenant_id", "collection_id", "doc_id")
+
+# Upper bound on distinct documents we count or paginate over per filter via the
+# doc_id facet. Beyond this, counts/listings are capped (see Phase 5 registry).
+DOC_FACET_CAP = 10_000
+
 
 class QdrantStore:
     def __init__(self) -> None:
@@ -17,6 +26,7 @@ class QdrantStore:
         )
         self.collection = settings.qdrant_collection
         self._ensure_collection()
+        self._ensure_indexes()
 
     def _ensure_collection(self) -> None:
         if not self.client.collection_exists(self.collection):
@@ -30,6 +40,19 @@ class QdrantStore:
                 },
                 sparse_vectors_config={"sparse": rest.SparseVectorParams()},
             )
+
+    def _ensure_indexes(self) -> None:
+        """Create keyword payload indexes (idempotent) so filtered search, count,
+        and facet over tenant/collection/doc_id use the index instead of scanning.
+        Qdrant builds these over any pre-existing points too."""
+        for field in INDEXED_FIELDS:
+            # Already indexed (or index is building) — safe to ignore.
+            with contextlib.suppress(Exception):
+                self.client.create_payload_index(
+                    collection_name=self.collection,
+                    field_name=f"metadata.{field}",
+                    field_schema=rest.PayloadSchemaType.KEYWORD,
+                )
 
     def upsert_chunks(self, chunks: list[DocumentChunk]) -> None:
         if not chunks:
@@ -115,21 +138,20 @@ class QdrantStore:
             chunks.append(chunk)
         return chunks
 
-    def _build_filter(self, filters: dict | None) -> rest.Filter | None:
+    def _filter_conditions(self, filters: dict | None) -> list[Any]:
         if not filters:
-            return None
+            return []
+        return [
+            rest.FieldCondition(key=f"metadata.{key}", match=rest.MatchValue(value=value))
+            for key, value in filters.items()
+        ]
 
-        conditions: list[Any] = []
-        for key, value in filters.items():
-            conditions.append(
-                rest.FieldCondition(
-                    key=f"metadata.{key}",
-                    match=rest.MatchValue(value=value),
-                )
-            )
-        return rest.Filter(must=conditions)
+    def _build_filter(self, filters: dict | None) -> rest.Filter | None:
+        conditions = self._filter_conditions(filters)
+        return rest.Filter(must=conditions) if conditions else None
 
     def count_points(self, filters: dict | None = None) -> int:
+        """Exact chunk (point) count for the filter — uses the payload index."""
         result = self.client.count(
             collection_name=self.collection,
             count_filter=self._build_filter(filters),
@@ -137,30 +159,67 @@ class QdrantStore:
         )
         return result.count
 
-    def list_documents(self, filters: dict | None = None, limit: int = 1000) -> list[dict]:
-        """Return distinct documents (deduped by doc_id) matching the filter."""
-        qdrant_filter = self._build_filter(filters)
-        docs: dict[str, dict] = {}
-        offset = None
-        while len(docs) < limit:
-            points, offset = self.client.scroll(
+    def _facet_doc_ids(self, filters: dict | None) -> list[str]:
+        """Distinct doc_ids matching the filter, via a facet over the indexed
+        doc_id field — no full scan. Bounded at DOC_FACET_CAP distinct docs."""
+        result = self.client.facet(
+            collection_name=self.collection,
+            key="metadata.doc_id",
+            facet_filter=self._build_filter(filters),
+            limit=DOC_FACET_CAP,
+            exact=True,
+        )
+        return [str(hit.value) for hit in result.hits]
+
+    def count_documents(self, filters: dict | None = None) -> int:
+        """Count distinct documents (by doc_id) matching the filter."""
+        return len(self._facet_doc_ids(filters))
+
+    def list_documents(
+        self, filters: dict | None = None, limit: int = 100, offset: int = 0
+    ) -> list[dict]:
+        """Return a page of distinct documents (deduped by doc_id) matching the
+        filter. Document ids come from the doc_id facet (indexed); only the page's
+        metadata is then fetched, so work is bounded by the page, not the corpus."""
+        page_ids = self._facet_doc_ids(filters)[offset : offset + limit]
+        if not page_ids:
+            return []
+
+        scroll_filter = rest.Filter(
+            must=[
+                *self._filter_conditions(filters),
+                rest.FieldCondition(
+                    key="metadata.doc_id", match=rest.MatchAny(any=page_ids)
+                ),
+            ]
+        )
+
+        # Fetch metadata for just this page's docs; stop once each is seen once.
+        remaining = set(page_ids)
+        meta_by_doc: dict[str, dict] = {}
+        cursor = None
+        while remaining:
+            points, cursor = self.client.scroll(
                 collection_name=self.collection,
-                scroll_filter=qdrant_filter,
+                scroll_filter=scroll_filter,
                 with_payload=True,
                 with_vectors=False,
                 limit=256,
-                offset=offset,
+                offset=cursor,
             )
             for point in points:
                 meta = (point.payload or {}).get("metadata", {})
                 doc_id = meta.get("doc_id")
-                if doc_id and doc_id not in docs:
-                    docs[doc_id] = {
+                if doc_id in remaining:
+                    meta_by_doc[doc_id] = {
                         "id": doc_id,
                         "filename": meta.get("title") or meta.get("source") or doc_id,
                         "status": "ready",
                         "created_at": meta.get("created_at") or "",
                     }
-            if offset is None:
+                    remaining.discard(doc_id)
+            if cursor is None:
                 break
-        return list(docs.values())
+
+        # Preserve facet order for a stable page.
+        return [meta_by_doc[doc_id] for doc_id in page_ids if doc_id in meta_by_doc]

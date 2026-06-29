@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.dependencies import Principal, get_collection_store, get_principal, get_store
 from app.db.collection_store import CollectionStore
@@ -15,7 +15,7 @@ router = APIRouter()
 def _with_counts(record: dict, store: QdrantStore, tenant_id: str) -> Collection:
     filters = {"collection_id": record["id"], "tenant_id": tenant_id}
     chunk_count = store.count_points(filters)
-    document_count = len(store.list_documents(filters)) if chunk_count else 0
+    document_count = store.count_documents(filters) if chunk_count else 0
     return Collection(**record, chunk_count=chunk_count, document_count=document_count)
 
 
@@ -62,11 +62,17 @@ async def delete_collection(
 @router.get("/collections/{collection_id}/documents", response_model=list[Document])
 async def list_collection_documents(
     collection_id: str,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     collections: CollectionStore = Depends(get_collection_store),
     store: QdrantStore = Depends(get_store),
     principal: Principal = Depends(get_principal),
 ) -> list[Document]:
     if collections.get(collection_id, principal.tenant_id) is None:
         raise HTTPException(status_code=404, detail="Collection not found")
-    docs = store.list_documents({"collection_id": collection_id, "tenant_id": principal.tenant_id})
+    docs = store.list_documents(
+        {"collection_id": collection_id, "tenant_id": principal.tenant_id},
+        limit=limit,
+        offset=offset,
+    )
     return [Document(**doc) for doc in docs]

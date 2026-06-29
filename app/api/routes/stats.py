@@ -17,6 +17,6 @@ async def stats(
     tenant_filter = {"tenant_id": principal.tenant_id}
     return Stats(
         collections=len(collections.list(principal.tenant_id)),
-        documents=len(store.list_documents(tenant_filter)),
+        documents=store.count_documents(tenant_filter),
         chunks=store.count_points(tenant_filter),
     )

@@ -8,8 +8,8 @@ class _FakeCollectionStore:
 
 
 class _FakeQdrant:
-    def list_documents(self, filters=None, limit=1000):
-        return [{"id": "d1"}, {"id": "d2"}, {"id": "d3"}]
+    def count_documents(self, filters=None):
+        return 3
 
     def count_points(self, filters=None):
         return 9

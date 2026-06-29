@@ -105,7 +105,10 @@ class _Qdrant:
     def count_points(self, filters=None):
         return 0
 
-    def list_documents(self, filters=None, limit=1000):
+    def count_documents(self, filters=None):
+        return 0
+
+    def list_documents(self, filters=None, limit=100, offset=0):
         return []
 
 
