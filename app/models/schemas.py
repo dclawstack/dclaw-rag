@@ -52,7 +52,6 @@ class QueryRequest(BaseModel):
     top_k: int = 10
     tenant_id: str | None = None
     collection_id: str | None = None
-    rewrite_query: bool = False
     verify: bool = True
     filters: dict[str, Any] = Field(default_factory=dict)
 
