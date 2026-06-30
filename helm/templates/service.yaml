@@ -9,13 +9,12 @@ spec:
   type: {{ .Values.service.backend.type }}
   ports:
     - port: {{ .Values.service.backend.port }}
-      targetPort: 8000
+      targetPort: http
       protocol: TCP
       name: http
   selector:
     app: {{ include "dclaw-app.name" . }}
     component: backend
-
 ---
 apiVersion: v1
 kind: Service
@@ -28,7 +27,7 @@ spec:
   type: {{ .Values.service.frontend.type }}
   ports:
     - port: {{ .Values.service.frontend.port }}
-      targetPort: 3000
+      targetPort: http
       protocol: TCP
       name: http
   selector:

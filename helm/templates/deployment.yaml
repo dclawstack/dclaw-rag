@@ -6,7 +6,7 @@ metadata:
     app: {{ include "dclaw-app.name" . }}
     component: backend
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{ .Values.backend.replicaCount }}
   selector:
     matchLabels:
       app: {{ include "dclaw-app.name" . }}
@@ -16,31 +16,77 @@ spec:
       labels:
         app: {{ include "dclaw-app.name" . }}
         component: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: {{ .Values.backend.port | quote }}
     spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: backend
-          image: "{{ .Values.image.backend.repository }}:{{ .Values.image.backend.tag }}"
-          imagePullPolicy: {{ .Values.image.backend.pullPolicy }}
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
           ports:
-            - containerPort: 8000
+            - name: http
+              containerPort: {{ .Values.backend.port }}
           envFrom:
             - secretRef:
-                name: {{ include "dclaw-app.fullname" . }}-secrets
+                name: {{ include "dclaw-app.fullname" . }}-env
           livenessProbe:
             httpGet:
-              path: /health/
-              port: 8000
-            initialDelaySeconds: 10
+              path: /health
+              port: http
+            initialDelaySeconds: 40
             periodSeconds: 30
           readinessProbe:
             httpGet:
-              path: /health/
-              port: 8000
-            initialDelaySeconds: 5
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 10
             periodSeconds: 10
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
-
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dclaw-app.fullname" . }}-worker
+  labels:
+    app: {{ include "dclaw-app.name" . }}
+    component: worker
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "dclaw-app.name" . }}
+      component: worker
+  template:
+    metadata:
+      labels:
+        app: {{ include "dclaw-app.name" . }}
+        component: worker
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: worker
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          command:
+            - celery
+            - -A
+            - app.worker.celery_app
+            - worker
+            - --queues
+            - ingestion
+            - --concurrency
+            - {{ .Values.worker.concurrency | quote }}
+          envFrom:
+            - secretRef:
+                name: {{ include "dclaw-app.fullname" . }}-env
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -50,7 +96,7 @@ metadata:
     app: {{ include "dclaw-app.name" . }}
     component: frontend
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{ .Values.frontend.replicaCount }}
   selector:
     matchLabels:
       app: {{ include "dclaw-app.name" . }}
@@ -63,9 +109,10 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: "{{ .Values.image.frontend.repository }}:{{ .Values.image.frontend.tag }}"
-          imagePullPolicy: {{ .Values.image.frontend.pullPolicy }}
+          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
           ports:
-            - containerPort: 3000
+            - name: http
+              containerPort: {{ .Values.frontend.port }}
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.frontend.resources | nindent 12 }}

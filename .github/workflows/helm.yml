@@ -1,0 +1,26 @@
+name: Helm
+
+# Validate the chart on any change to it, so a broken template can't merge.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "helm/**"
+      - ".github/workflows/helm.yml"
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - run: helm lint helm/
+      - name: Render templates (default + ServiceMonitor on)
+        run: |
+          helm template rel helm/ \
+            --set secrets.adminApiKey=ci \
+            --set secrets.jwtSecret=ci-strong-secret-that-is-long-enough-xx > /dev/null
+          helm template rel helm/ --set metrics.serviceMonitor.enabled=true \
+            --set secrets.adminApiKey=ci \
+            --set secrets.jwtSecret=ci-strong-secret-that-is-long-enough-xx > /dev/null

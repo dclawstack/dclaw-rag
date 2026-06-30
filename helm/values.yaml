@@ -1,38 +1,70 @@
-replicaCount: 1
+# DClaw RAG Helm chart.
+#
+# Deploys the app: backend (FastAPI), worker (Celery ingestion), frontend.
+# Qdrant + Redis are expected to be provided (managed, or your own in-cluster
+# deployments) and referenced via config.qdrantUrl / config.redisUrl below.
 
-image:
-  backend:
+nameOverride: ""
+fullnameOverride: ""
+
+backend:
+  replicaCount: 1
+  image:
     repository: ghcr.io/dclawstack/dclaw-rag-backend
     tag: latest
     pullPolicy: IfNotPresent
-  frontend:
+  port: 8090
+  resources: {}
+
+# The worker runs the backend image with a Celery command.
+worker:
+  replicaCount: 1
+  concurrency: 2
+  resources: {}
+
+frontend:
+  replicaCount: 1
+  image:
     repository: ghcr.io/dclawstack/dclaw-rag-frontend
     tag: latest
     pullPolicy: IfNotPresent
+  port: 3003
+  resources: {}
 
 service:
   backend:
     type: ClusterIP
-    port: 8000
+    port: 8090
   frontend:
     type: ClusterIP
-    port: 3000
+    port: 3003
 
-ingress:
-  enabled: false
-  className: ""
-  annotations: {}
-  hosts: []
-  tls: []
+# Non-secret app config (rendered into the env Secret alongside the secrets).
+config:
+  appEnv: production
+  qdrantUrl: http://qdrant:6333
+  redisUrl: redis://redis:6379/0
+  celeryBrokerUrl: redis://redis:6379/1
+  llmProvider: openrouter
+  embeddingDevice: cpu
+  corsAllowOrigins: '["https://app.example.com"]'
 
-resources: {}
+# Sensitive values — override per environment (e.g. --set, SealedSecrets, or an
+# external secrets operator). Empty by default so nothing fake ships.
+secrets:
+  adminApiKey: ""
+  jwtSecret: ""
+  bootstrapApiKey: ""
+  openaiApiKey: ""
+  anthropicApiKey: ""
+  openrouterApiKey: ""
 
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 5
-  targetCPUUtilizationPercentage: 80
+# Prometheus Operator ServiceMonitor scraping /metrics (off by default).
+metrics:
+  serviceMonitor:
+    enabled: false
+    interval: 30s
 
-nodeSelector: {}
-tolerations: []
-affinity: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
