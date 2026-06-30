@@ -134,7 +134,9 @@ secrets/CORS/LLM-provider keys are missing (`validate_runtime_config`).
   `claude-code-review.yml` runs an automated review on PRs.
 - **RAG quality eval** (`.github/workflows/eval.yml`, `scripts/evaluate.py`) runs nightly, on
   demand, and on retrieval-touching PRs: it ingests `eval/golden_set.json` into a throwaway
-  Qdrant collection and gates on hit-rate / MRR / abstention accuracy. Needs no LLM.
+  Qdrant collection and gates on hit-rate / MRR / abstention accuracy (no LLM needed). It also
+  does **LLM-graded answer quality** — but only when a provider key is configured (the secret
+  is passed in CI); without one it's skipped, not failed.
 
 ## Running Locally
 - **Python deps:** install CPU-only torch first, then the package — the app runs on CPU,
