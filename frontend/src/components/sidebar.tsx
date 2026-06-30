@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { APP_NAME, APP_COLOR } from "@/lib/tokens";
+import { logout } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { Database, FileUp, Home, Search, Settings } from "lucide-react";
+import { Database, FileUp, Home, LogOut, Search, Settings } from "lucide-react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: Home },
@@ -64,6 +65,14 @@ export function Sidebar() {
           <Settings className="w-4 h-4" />
           Settings
         </Link>
+        <button
+          type="button"
+          onClick={logout}
+          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+        >
+          <LogOut className="w-4 h-4" />
+          Log out
+        </button>
       </div>
     </aside>
   );

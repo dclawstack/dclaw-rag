@@ -1,7 +1,18 @@
+import { clearToken, getToken } from "./auth";
 import { API_BASE, API_KEY } from "./tokens";
 
-const authHeaders = (): Record<string, string> =>
-  API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {};
+// Prefer the logged-in user's JWT; fall back to the dev API key if configured.
+const authHeaders = (): Record<string, string> => {
+  const token = getToken() || API_KEY;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+function handleUnauthorized(status: number) {
+  if (status === 401 && typeof window !== "undefined") {
+    clearToken();
+    window.location.href = "/login";
+  }
+}
 
 export interface ChunkMetadata {
   source?: string;
@@ -68,7 +79,10 @@ async function apiFetch(path: string, options?: RequestInit) {
       ...options?.headers,
     },
   });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) {
+    handleUnauthorized(res.status);
+    throw new Error(`API error: ${res.status}`);
+  }
   return res.json();
 }
 
@@ -155,7 +169,10 @@ export async function ingestFile(
       headers: authHeaders(),
     }
   );
-  if (!res.ok) throw new Error(`Upload error: ${res.status}`);
+  if (!res.ok) {
+    handleUnauthorized(res.status);
+    throw new Error(`Upload error: ${res.status}`);
+  }
   return res.json();
 }
 
