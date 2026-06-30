@@ -68,6 +68,8 @@ export interface Document {
   filename: string;
   status: string;
   created_at: string;
+  chunk_count: number;
+  error: string | null;
 }
 
 async function apiFetch(path: string, options?: RequestInit) {
@@ -208,4 +210,8 @@ export async function deleteCollection(id: string): Promise<void> {
 
 export async function getDocuments(collectionId: string): Promise<Document[]> {
   return apiFetch(`/api/v1/rag/collections/${collectionId}/documents`);
+}
+
+export async function getDocument(docId: string): Promise<Document> {
+  return apiFetch(`/api/v1/rag/documents/${docId}`);
 }
