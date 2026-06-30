@@ -6,9 +6,13 @@ Ingests a small golden corpus into an isolated Qdrant collection, then measures:
   * MRR         — how high does the first correct chunk rank?
   * abstention  — do off-topic questions score below the abstain threshold?
 
-It exercises the real retrieval stack (hybrid dense+sparse -> RRF -> rerank) but
-needs no LLM: retrieval and abstention are deterministic given the models. Exits
-non-zero if any metric falls below its threshold, so it can gate CI.
+  * answer quality — (optional) run the full RAG pipeline and have an LLM judge
+    score each answer against a reference. Runs only when the configured LLM
+    provider is reachable; otherwise it is skipped (not failed), so CI without a
+    key still passes on the deterministic metrics above.
+
+The retrieval/abstention metrics need no LLM and are deterministic given the
+models. Exits non-zero if any computed metric falls below its threshold.
 
 Usage:
   python scripts/evaluate.py [--golden eval/golden_set.json] [--top-k 10]
@@ -17,6 +21,7 @@ Usage:
 """
 
 import argparse
+import asyncio
 import json
 import sys
 from pathlib import Path
@@ -47,7 +52,69 @@ def _ingest_corpus(corpus: list[dict]) -> None:
         )
 
 
-def run(golden_path: Path, top_k: int, min_hit: float, min_mrr: float, min_abstain: float) -> int:
+def _llm_available() -> bool:
+    """True if the configured LLM provider can be reached (so answer-quality
+    grading can run). False -> grading is skipped, not failed."""
+    keyed = {
+        "openai": settings.openai_api_key,
+        "anthropic": settings.anthropic_api_key,
+        "openrouter": settings.openrouter_api_key,
+    }
+    if settings.llm_provider in keyed:
+        return bool(keyed[settings.llm_provider])
+    if settings.llm_provider == "ollama":
+        import httpx
+
+        try:
+            httpx.get(settings.ollama_url, timeout=2.0)
+            return True
+        except Exception:
+            return False
+    return False
+
+
+async def _grade_answers(data: dict, searcher, top_k: int) -> list[float]:
+    """For each answerable question, run the real RAG pipeline and have an LLM
+    judge score the answer against the reference (0..1)."""
+    from app.generation.llm_gateway import get_llm_gateway
+    from app.generation.synthesis import _extract_json_object, parse_answer, render_rag_prompt
+
+    llm = get_llm_gateway()
+    scores: list[float] = []
+    for item in data["answerable"]:
+        chunks = searcher.search(item["question"], top_k=top_k)
+        raw = await llm.complete(
+            [
+                {"role": "system", "content": "You are a helpful RAG assistant."},
+                {"role": "user", "content": render_rag_prompt(chunks, item["question"])},
+            ]
+        )
+        answer, _, _ = parse_answer(raw)
+        judge_prompt = (
+            "Score how well the CANDIDATE conveys the key facts of the REFERENCE "
+            "answer to the QUESTION, from 0.0 to 1.0. Respond with ONLY JSON: "
+            '{"score": <float 0-1>, "reason": "<short>"}.\n\n'
+            f"QUESTION: {item['question']}\n"
+            f"REFERENCE: {item['expected_answer']}\n"
+            f"CANDIDATE: {answer}"
+        )
+        verdict_raw = await llm.complete([{"role": "user", "content": judge_prompt}])
+        verdict = _extract_json_object(verdict_raw)
+        try:
+            scores.append(max(0.0, min(1.0, float((verdict or {}).get("score", 0.0)))))
+        except (TypeError, ValueError):
+            scores.append(0.0)
+    return scores
+
+
+def run(
+    golden_path: Path,
+    top_k: int,
+    min_hit: float,
+    min_mrr: float,
+    min_abstain: float,
+    min_answer_score: float,
+) -> int:
     data = json.loads(golden_path.read_text())
 
     # Isolate eval data from any real collection BEFORE stores are constructed.
@@ -88,6 +155,12 @@ def run(golden_path: Path, top_k: int, min_hit: float, min_mrr: float, min_absta
     n_unans = len(data["unanswerable"])
     abstain_acc = correct_abstentions / n_unans if n_unans else 1.0
 
+    # --- answer quality (LLM-graded; skipped when no provider key is available) ---
+    answer_score: float | None = None
+    if _llm_available():
+        graded = asyncio.run(_grade_answers(data, searcher, top_k))
+        answer_score = sum(graded) / len(graded) if graded else 0.0
+
     # --- report ---
     print("=" * 60)
     print(f"RAG evaluation  (top_k={top_k}, abstain_threshold={settings.abstain_threshold})")
@@ -98,6 +171,10 @@ def run(golden_path: Path, top_k: int, min_hit: float, min_mrr: float, min_absta
         f"  Abstention acc.  {abstain_acc:6.1%}  "
         f"({correct_abstentions}/{n_unans})        min {min_abstain:.0%}"
     )
+    if answer_score is None:
+        print("  Answer quality   skipped  (no LLM provider key)")
+    else:
+        print(f"  Answer quality   {answer_score:6.3f}                  min {min_answer_score:.3f}")
     print("=" * 60)
 
     failures = []
@@ -107,6 +184,8 @@ def run(golden_path: Path, top_k: int, min_hit: float, min_mrr: float, min_absta
         failures.append(f"MRR {mrr:.3f} < {min_mrr:.3f}")
     if abstain_acc < min_abstain:
         failures.append(f"abstention accuracy {abstain_acc:.1%} < {min_abstain:.0%}")
+    if answer_score is not None and answer_score < min_answer_score:
+        failures.append(f"answer quality {answer_score:.3f} < {min_answer_score:.3f}")
 
     if failures:
         print("FAIL: " + "; ".join(failures))
@@ -122,6 +201,7 @@ def main() -> None:
     parser.add_argument("--min-hit-rate", type=float, default=0.9)
     parser.add_argument("--min-mrr", type=float, default=0.7)
     parser.add_argument("--min-abstain-accuracy", type=float, default=0.75)
+    parser.add_argument("--min-answer-score", type=float, default=0.6)
     args = parser.parse_args()
 
     sys.exit(
@@ -131,6 +211,7 @@ def main() -> None:
             args.min_hit_rate,
             args.min_mrr,
             args.min_abstain_accuracy,
+            args.min_answer_score,
         )
     )
 

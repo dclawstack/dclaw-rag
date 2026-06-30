@@ -52,6 +52,13 @@ jobs:
           done
           echo "Qdrant did not become ready" && exit 1
       - name: Run RAG evaluation
+        # Retrieval + abstention always run. Answer-quality grading runs only if
+        # an LLM provider key is configured as a secret; otherwise it's skipped.
         env:
           QDRANT_URL: http://localhost:6333
+          LLM_PROVIDER: ${{ vars.EVAL_LLM_PROVIDER || 'openrouter' }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENROUTER_MODEL: ${{ vars.EVAL_LLM_MODEL || 'anthropic/claude-sonnet-4.5' }}
         run: python scripts/evaluate.py

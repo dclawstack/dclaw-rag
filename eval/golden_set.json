@@ -28,16 +28,16 @@
     }
   ],
   "answerable": [
-    { "question": "Which is the largest planet in the Solar System?", "expected_source": "solar-system" },
-    { "question": "How many planets are there and which one is farthest from the Sun?", "expected_source": "solar-system" },
-    { "question": "Why do most plants look green?", "expected_source": "photosynthesis" },
-    { "question": "What do plants produce during photosynthesis?", "expected_source": "photosynthesis" },
-    { "question": "What does HTTP status code 404 mean?", "expected_source": "http-protocol" },
-    { "question": "Which HTTP method is used to retrieve a resource?", "expected_source": "http-protocol" },
-    { "question": "What was Acme's revenue in Q3 2026?", "expected_source": "acme-finance" },
-    { "question": "What drove Acme's revenue growth?", "expected_source": "acme-finance" },
-    { "question": "During which dynasty were the best-known sections of the Great Wall built?", "expected_source": "great-wall" },
-    { "question": "Is the Great Wall of China visible from space with the naked eye?", "expected_source": "great-wall" }
+    { "question": "Which is the largest planet in the Solar System?", "expected_source": "solar-system", "expected_answer": "Jupiter is the largest planet." },
+    { "question": "How many planets are there and which one is farthest from the Sun?", "expected_source": "solar-system", "expected_answer": "There are eight planets, and Neptune is the farthest from the Sun." },
+    { "question": "Why do most plants look green?", "expected_source": "photosynthesis", "expected_answer": "Chlorophyll reflects green light (while absorbing blue and red wavelengths), so plants appear green." },
+    { "question": "What do plants produce during photosynthesis?", "expected_source": "photosynthesis", "expected_answer": "Plants produce glucose and release oxygen." },
+    { "question": "What does HTTP status code 404 mean?", "expected_source": "http-protocol", "expected_answer": "404 means the requested resource was not found." },
+    { "question": "Which HTTP method is used to retrieve a resource?", "expected_source": "http-protocol", "expected_answer": "GET is used to retrieve a resource." },
+    { "question": "What was Acme's revenue in Q3 2026?", "expected_source": "acme-finance", "expected_answer": "Acme's Q3 2026 revenue was 5.0 million dollars." },
+    { "question": "What drove Acme's revenue growth?", "expected_source": "acme-finance", "expected_answer": "Growth was driven by the enterprise software division and expansion into the European market." },
+    { "question": "During which dynasty were the best-known sections of the Great Wall built?", "expected_source": "great-wall", "expected_answer": "The most well-known sections were built during the Ming dynasty." },
+    { "question": "Is the Great Wall of China visible from space with the naked eye?", "expected_source": "great-wall", "expected_answer": "No, it is not visible to the naked eye from space." }
   ],
   "unanswerable": [
     { "question": "What is the recipe for a classic Italian tiramisu?" },
