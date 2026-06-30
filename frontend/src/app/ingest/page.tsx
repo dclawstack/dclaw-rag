@@ -1,7 +1,14 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { ingestFile, ingestText, listCollections, Collection } from "@/lib/api";
+import {
+  ingestFile,
+  ingestText,
+  listCollections,
+  getDocument,
+  Collection,
+  Document,
+} from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,12 +31,36 @@ export default function IngestPage() {
   const [dragOver, setDragOver] = useState(false);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [collectionId, setCollectionId] = useState("");
+  const [recent, setRecent] = useState<Document[]>([]);
 
   useEffect(() => {
     listCollections()
       .then(setCollections)
       .catch(() => setCollections([]));
   }, []);
+
+  // Poll the status of documents still being processed by the worker.
+  useEffect(() => {
+    const inFlight = recent.some(
+      (d) => d.status === "pending" || d.status === "processing"
+    );
+    if (!inFlight) return;
+    const interval = setInterval(async () => {
+      const updates = await Promise.all(
+        recent
+          .filter((d) => d.status === "pending" || d.status === "processing")
+          .map((d) => getDocument(d.id).catch(() => null))
+      );
+      setRecent((prev) =>
+        prev.map((d) => updates.find((u) => u && u.id === d.id) ?? d)
+      );
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [recent]);
+
+  function trackUpload(doc: Document) {
+    setRecent((prev) => [doc, ...prev.filter((d) => d.id !== doc.id)].slice(0, 8));
+  }
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -64,8 +95,16 @@ export default function IngestPage() {
         collection_id: collectionId || undefined,
       });
       setProgress(100);
+      trackUpload({
+        id: res.doc_id,
+        filename: title || file.name,
+        status: res.status,
+        created_at: "",
+        chunk_count: 0,
+        error: null,
+      });
       toast.success("Document queued", {
-        description: `Document ${res.doc_id} is ${res.status} — processing in the background`,
+        description: "Processing in the background — status below.",
       });
       setFile(null);
       setTitle("");
@@ -92,8 +131,16 @@ export default function IngestPage() {
         collection_id: collectionId || undefined,
       });
       setProgress(100);
+      trackUpload({
+        id: res.doc_id,
+        filename: title || "Text ingestion",
+        status: res.status,
+        created_at: "",
+        chunk_count: 0,
+        error: null,
+      });
       toast.success("Document queued", {
-        description: `Document ${res.doc_id} is ${res.status} — processing in the background`,
+        description: "Processing in the background — status below.",
       });
       setText("");
       setTitle("");
@@ -315,6 +362,40 @@ export default function IngestPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {recent.length > 0 && (
+        <Card>
+          <CardContent className="p-4 space-y-2">
+            <p className="text-sm font-medium">Recent uploads</p>
+            <ul className="divide-y">
+              {recent.map((doc) => (
+                <li key={doc.id} className="flex items-center justify-between gap-3 py-2">
+                  <span className="truncate text-sm">{doc.filename}</span>
+                  {doc.status === "ready" ? (
+                    <Badge className="gap-1 bg-green-100 text-green-800 hover:bg-green-100">
+                      <CheckCircle className="w-3 h-3" />
+                      Ready · {doc.chunk_count} chunks
+                    </Badge>
+                  ) : doc.status === "failed" ? (
+                    <Badge
+                      className="gap-1 bg-red-100 text-red-800 hover:bg-red-100"
+                      title={doc.error ?? undefined}
+                    >
+                      <AlertCircle className="w-3 h-3" />
+                      Failed
+                    </Badge>
+                  ) : (
+                    <Badge className="gap-1 bg-amber-100 text-amber-800 hover:bg-amber-100 animate-pulse">
+                      <Upload className="w-3 h-3" />
+                      {doc.status === "processing" ? "Processing…" : "Queued…"}
+                    </Badge>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="bg-amber-50 border-amber-200">
         <CardContent className="p-4 flex items-start gap-3">
