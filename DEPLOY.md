@@ -80,4 +80,23 @@ Provision managed **Qdrant** and **Redis** (or run the compose ones).
   is its own tenant) or a **machine API key** minted with the admin key. The browser uses the
   JWT; `NEXT_PUBLIC_API_KEY` is a dev bypass — leave it unset in production so the UI requires
   login.
-- A Helm chart skeleton lives in `helm/`.
+## Kubernetes (Helm)
+
+The chart in `helm/` deploys the backend, worker, and frontend (point it at managed
+Qdrant + Redis via `config.qdrantUrl` / `config.redisUrl`). Probes are wired to the real
+endpoints — liveness `/health`, readiness `/health/ready` — and `metrics.serviceMonitor.enabled=true`
+scrapes `/metrics` via the Prometheus Operator.
+
+```bash
+helm upgrade --install dclaw helm/ \
+  --set secrets.adminApiKey=<...> \
+  --set secrets.jwtSecret=<strong, >=32 chars> \
+  --set secrets.openrouterApiKey=<...> \
+  --set config.corsAllowOrigins='["https://your-ui"]'
+```
+
+Images are published to GHCR on a version tag (`v*`) by `.github/workflows/release.yml`
+(`ghcr.io/dclawstack/dclaw-rag-backend` and `-frontend`); `helm lint` runs on every chart
+change. The frontend image bakes `NEXT_PUBLIC_API_URL` at build time, so rebuild it per
+environment (or pass `--build-arg`). No automated cluster rollout ships in this repo — add a
+deploy job with your kubeconfig when you have a target.

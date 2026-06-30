@@ -1,0 +1,58 @@
+name: Release
+
+# On a version tag, build and push the backend + frontend images to GHCR and
+# validate the Helm chart. No cluster rollout (no deploy creds in this repo).
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - name: backend
+            context: .
+            dockerfile: Dockerfile
+            image: ghcr.io/dclawstack/dclaw-rag-backend
+          - name: frontend
+            context: ./frontend
+            dockerfile: ./frontend/Dockerfile
+            image: ghcr.io/dclawstack/dclaw-rag-frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ matrix.image }}
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - run: helm lint helm/
+      - name: Render templates
+        run: |
+          helm template rel helm/ \
+            --set secrets.adminApiKey=ci \
+            --set secrets.jwtSecret=ci-strong-secret-that-is-long-enough-xx > /dev/null
