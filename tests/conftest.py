@@ -9,7 +9,7 @@ TEST_TENANT = "test-tenant"
 
 
 class _AllowAllLimiter:
-    def check(self, tenant_id):
+    def check(self, key, limit=None):
         return True, 0
 
 

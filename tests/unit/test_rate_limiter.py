@@ -46,3 +46,8 @@ def test_tenants_are_isolated():
     assert rl.check("a")[0] is True
     assert rl.check("b")[0] is True  # separate counter
     assert rl.check("a")[0] is False
+
+
+def test_per_call_limit_override():
+    rl = _limiter(limit=100)  # default high...
+    assert [rl.check("auth:ip", limit=2)[0] for _ in range(4)] == [True, True, False, False]

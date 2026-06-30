@@ -4,7 +4,12 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.api.dependencies import Principal, get_principal, get_user_store
+from app.api.dependencies import (
+    Principal,
+    enforce_auth_rate_limit,
+    get_principal,
+    get_user_store,
+)
 from app.core.config import settings
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db.user_store import UserStore
@@ -20,7 +25,11 @@ def _token_for(user_id: str, tenant_id: str, email: str) -> TokenResponse:
     )
 
 
-@router.post("/auth/register", response_model=TokenResponse)
+@router.post(
+    "/auth/register",
+    response_model=TokenResponse,
+    dependencies=[Depends(enforce_auth_rate_limit)],
+)
 async def register(
     body: RegisterRequest,
     users: UserStore = Depends(get_user_store),
@@ -41,7 +50,11 @@ async def register(
     return _token_for(record["id"], record["tenant_id"], email)
 
 
-@router.post("/auth/login", response_model=TokenResponse)
+@router.post(
+    "/auth/login",
+    response_model=TokenResponse,
+    dependencies=[Depends(enforce_auth_rate_limit)],
+)
 async def login(
     body: LoginRequest,
     users: UserStore = Depends(get_user_store),

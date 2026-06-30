@@ -15,7 +15,7 @@ class _Limiter:
     def __init__(self, allowed: bool):
         self._allowed = allowed
 
-    def check(self, tenant_id):
+    def check(self, key, limit=None):
         return (True, 0) if self._allowed else (False, 30)
 
 

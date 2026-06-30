@@ -1,4 +1,9 @@
-from app.api.dependencies import get_api_key_store, get_principal, get_user_store
+from app.api.dependencies import (
+    get_api_key_store,
+    get_principal,
+    get_rate_limiter,
+    get_user_store,
+)
 from app.api.main import app
 from app.core.security import create_access_token, hash_password
 
@@ -97,6 +102,19 @@ async def test_me_requires_auth(client):
     _unauth()
     app.dependency_overrides[get_api_key_store] = lambda: _FakeApiKeyStore()
     assert (await client.get(ME)).status_code == 401
+
+
+class _BlockingLimiter:
+    def check(self, key, limit=None):
+        return False, 30
+
+
+async def test_register_is_ip_rate_limited(client):
+    app.dependency_overrides[get_user_store] = lambda: _FakeUserStore()
+    app.dependency_overrides[get_rate_limiter] = lambda: _BlockingLimiter()
+    resp = await client.post(REGISTER, json={"email": "x@example.com", "password": "s3cretpass"})
+    assert resp.status_code == 429
+    assert resp.headers["Retry-After"] == "30"
 
 
 async def test_api_key_is_not_a_user_session(client):
