@@ -20,17 +20,21 @@ class RateLimiter:
             settings.rate_limit_per_minute if limit_per_minute is None else limit_per_minute
         )
 
-    def check(self, tenant_id: str) -> tuple[bool, int]:
-        """Return (allowed, retry_after_seconds). retry_after is 0 when allowed."""
-        if self.limit <= 0:  # disabled
+    def check(self, key: str, limit: int | None = None) -> tuple[bool, int]:
+        """Return (allowed, retry_after_seconds). retry_after is 0 when allowed.
+
+        `key` namespaces the counter (a tenant id, or e.g. "auth:<ip>"); `limit`
+        overrides the default per-minute limit for this call."""
+        effective_limit = self.limit if limit is None else limit
+        if effective_limit <= 0:  # disabled
             return True, 0
 
         window = int(time.time()) // self.WINDOW_SECONDS
-        key = f"rl:{tenant_id}:{window}"
-        count = self._redis.incr(key)
+        redis_key = f"rl:{key}:{window}"
+        count = self._redis.incr(redis_key)
         if count == 1:
-            self._redis.expire(key, self.WINDOW_SECONDS)
-        if count > self.limit:
+            self._redis.expire(redis_key, self.WINDOW_SECONDS)
+        if count > effective_limit:
             retry_after = self.WINDOW_SECONDS - (int(time.time()) % self.WINDOW_SECONDS)
             return False, retry_after
         return True, 0

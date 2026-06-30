@@ -60,6 +60,7 @@ class Settings(BaseSettings):
 
     # Abuse / resource limits.
     rate_limit_per_minute: int = 60  # per tenant, on the costly endpoints; 0 disables
+    auth_rate_limit_per_minute: int = 10  # per client IP, on register/login; 0 disables
     max_upload_bytes: int = 10 * 1024 * 1024  # 10 MiB per uploaded file
     max_request_bytes: int = 12 * 1024 * 1024  # global request body cap
 

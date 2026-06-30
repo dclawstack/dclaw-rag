@@ -1,5 +1,6 @@
 from fastapi import Depends, Header, HTTPException, Request
 
+from app.core.config import settings
 from app.core.security import decode_access_token
 from app.db.api_key_store import ApiKeyStore
 from app.db.collection_store import CollectionStore
@@ -121,5 +122,28 @@ async def enforce_rate_limit(
         raise HTTPException(
             status_code=429,
             detail="Rate limit exceeded",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+async def enforce_auth_rate_limit(
+    request: Request,
+    limiter: RateLimiter = Depends(get_rate_limiter),
+) -> None:
+    """Guard for the unauthenticated auth endpoints: rate-limit by client IP."""
+    allowed, retry_after = limiter.check(
+        f"auth:{_client_ip(request)}", limit=settings.auth_rate_limit_per_minute
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many attempts; try again shortly",
             headers={"Retry-After": str(retry_after)},
         )
