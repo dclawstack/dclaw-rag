@@ -1,10 +1,12 @@
 from fastapi import Depends, Header, HTTPException, Request
 
+from app.core.security import decode_access_token
 from app.db.api_key_store import ApiKeyStore
 from app.db.collection_store import CollectionStore
 from app.db.document_store import DocumentStore
 from app.db.qdrant_store import QdrantStore
 from app.db.rate_limiter import RateLimiter
+from app.db.user_store import UserStore
 from app.generation.llm_gateway import LLMGateway, get_llm_gateway
 from app.ingestion.pipeline import IngestionPipeline
 from app.retrieval.search import Searcher
@@ -52,12 +54,26 @@ async def get_document_store(request: Request) -> DocumentStore:
     return request.app.state.document_store
 
 
-class Principal:
-    """The authenticated caller, resolved from an API key."""
+async def get_user_store(request: Request) -> UserStore:
+    if not hasattr(request.app.state, "user_store"):
+        request.app.state.user_store = UserStore()
+    return request.app.state.user_store
 
-    def __init__(self, tenant_id: str, key_name: str = "") -> None:
+
+class Principal:
+    """The authenticated caller — an end user (JWT) or a machine (API key)."""
+
+    def __init__(
+        self,
+        tenant_id: str,
+        key_name: str = "",
+        user_id: str | None = None,
+        email: str | None = None,
+    ) -> None:
         self.tenant_id = tenant_id
         self.key_name = key_name
+        self.user_id = user_id
+        self.email = email
 
 
 async def get_principal(
@@ -65,17 +81,28 @@ async def get_principal(
     x_api_key: str | None = Header(default=None),
     store: ApiKeyStore = Depends(get_api_key_store),
 ) -> Principal:
-    raw_key = None
+    raw = None
     if authorization and authorization.lower().startswith("bearer "):
-        raw_key = authorization[7:].strip()
+        raw = authorization[7:].strip()
     elif x_api_key:
-        raw_key = x_api_key.strip()
-    if not raw_key:
-        raise HTTPException(status_code=401, detail="Missing API key")
-    record = store.get(raw_key)
-    if not record:
-        raise HTTPException(status_code=401, detail="Invalid API key")
-    return Principal(tenant_id=record["tenant_id"], key_name=record.get("name", ""))
+        raw = x_api_key.strip()
+    if not raw:
+        raise HTTPException(status_code=401, detail="Missing credentials")
+
+    # A Bearer token may be a user JWT or a machine API key — try JWT first.
+    claims = decode_access_token(raw)
+    if claims:
+        return Principal(
+            tenant_id=claims["tenant_id"],
+            user_id=claims.get("sub"),
+            email=claims.get("email"),
+        )
+
+    record = store.get(raw)
+    if record:
+        return Principal(tenant_id=record["tenant_id"], key_name=record.get("name", ""))
+
+    raise HTTPException(status_code=401, detail="Invalid or expired credentials")
 
 
 async def get_rate_limiter(request: Request) -> RateLimiter:

@@ -8,6 +8,7 @@ def _settings(**overrides):
         "bootstrap_api_key": None,
         "cors_allow_origins": ["https://app.example.com"],
         "llm_provider": "ollama",  # local provider needs no key
+        "jwt_secret": "a-strong-production-jwt-secret-value-1234",
     }
     base.update(overrides)
     return Settings(**base)
@@ -30,6 +31,16 @@ def test_dev_placeholder_key_is_flagged():
 def test_wildcard_cors_is_flagged():
     problems = validate_runtime_config(_settings(cors_allow_origins=["*"]))
     assert any("CORS" in p for p in problems)
+
+
+def test_dev_or_weak_jwt_secret_is_flagged():
+    assert any(
+        "JWT_SECRET" in p
+        for p in validate_runtime_config(
+            _settings(jwt_secret="dev-insecure-jwt-secret-change-me")
+        )
+    )
+    assert any("JWT_SECRET" in p for p in validate_runtime_config(_settings(jwt_secret="short")))
 
 
 def test_missing_provider_key_is_flagged():

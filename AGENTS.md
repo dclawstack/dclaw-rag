@@ -42,10 +42,15 @@ questions and get cited, LLM-synthesized answers.
   Supported formats live in `app/ingestion/extractors/` + the `loaders` registry (PDF,
   DOCX, HTML, CSV/TSV, Markdown, plaintext).
 - **Generation** (`app/generation/`): `LLMGateway` (OpenAI / Anthropic) + Jinja prompt.
-- **Security/abuse** (`app/api/middleware.py`, `app/db/rate_limiter.py`): API-key auth →
-  tenant on every `/api/v1/rag/*` route; per-tenant rate limit on query/agent/ingest (429 +
-  `Retry-After`); request-body and upload size caps (413); security headers on every
-  response; request schemas carry length/range bounds. Limits live in `settings`.
+- **Auth** (`app/core/security.py`, `app/db/user_store.py`, `app/api/routes/auth.py`): two
+  credential types resolve to a tenant via `get_principal` — **end-user JWTs** (email+password
+  signup/login, argon2 hashes in Redis; each signup gets its own tenant) and **machine API
+  keys** (admin-minted). `/api/v1/rag/auth/{register,login,refresh,me}`. The frontend stores
+  the JWT and an `AuthGate` guards the app; `NEXT_PUBLIC_API_KEY` is a dev bypass.
+- **Security/abuse** (`app/api/middleware.py`, `app/db/rate_limiter.py`): per-tenant rate limit
+  on query/agent/ingest (429 + `Retry-After`); request-body and upload size caps (413);
+  security headers on every response; request schemas carry length/range bounds. Limits live
+  in `settings`.
 - **Observability** (`app/api/middleware.py`, `app/core/metrics.py`): every request gets an
   `X-Request-ID` (echoed if supplied) bound into a structured access log (method, path,
   status, duration). Prometheus at **`GET /metrics`** (HTTP counter/histogram + RAG query/

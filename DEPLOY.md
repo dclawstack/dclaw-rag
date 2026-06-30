@@ -32,6 +32,7 @@ if any of these are wrong (see `validate_runtime_config`):
 
 - `ADMIN_API_KEY` must be set (it gates tenant-key minting) and must not be a dev placeholder.
 - `BOOTSTRAP_API_KEY`, if set, must not be a dev placeholder.
+- `JWT_SECRET` must be a strong, unique value (≥32 chars) — it signs end-user login tokens.
 - `CORS_ALLOW_ORIGINS` must not be `*`.
 - The selected `LLM_PROVIDER` must have its key set (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY` /
   `OPENROUTER_API_KEY`; `ollama` needs none).
@@ -41,6 +42,7 @@ Required/important environment (see `.env.example` for the full list):
 ```
 APP_ENV=production
 ADMIN_API_KEY=<strong secret>            # mint tenant keys via POST /api/v1/rag/keys
+JWT_SECRET=<strong secret, >=32 chars>   # signs end-user login tokens
 CORS_ALLOW_ORIGINS=["https://your-ui"]   # JSON list of allowed browser origins
 QDRANT_URL=http://qdrant:6333
 REDIS_URL=redis://redis:6379/0
@@ -73,7 +75,9 @@ Provision managed **Qdrant** and **Redis** (or run the compose ones).
 
 - **Cold start:** embedding + reranker models (~2.5 GB) download/load lazily on first use.
   Expect a slow first request per replica; pre-warm by hitting `/api/v1/rag/query` after deploy.
-- **Auth:** every `/api/v1/rag/*` route requires `Authorization: Bearer <key>`. Mint per-tenant
-  keys with the admin key; the browser key (`NEXT_PUBLIC_API_KEY`) is a dev convenience —
-  front a real login (JWT) for production end users.
+- **Auth:** every `/api/v1/rag/*` route requires `Authorization: Bearer <token>`, which is
+  either an **end-user JWT** (self-serve `POST /auth/register` / `/auth/login`; each account
+  is its own tenant) or a **machine API key** minted with the admin key. The browser uses the
+  JWT; `NEXT_PUBLIC_API_KEY` is a dev bypass — leave it unset in production so the UI requires
+  login.
 - A Helm chart skeleton lives in `helm/`.

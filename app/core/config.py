@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     bootstrap_tenant: str = "default"
     admin_api_key: str | None = None
 
+    # End-user auth (email+password -> JWT). jwt_secret signs access tokens.
+    jwt_secret: str = "dev-insecure-jwt-secret-change-me"
+    jwt_access_token_expire_minutes: int = 720  # 12h
+
     embedding_model: str = "BAAI/bge-large-en-v1.5"
     embedding_device: str = "cpu"
     embedding_batch_size: int = 32
@@ -66,6 +70,7 @@ settings = Settings()
 
 # Dev placeholders that must never reach production.
 _DEV_KEYS = {"sk_dev_bootstrap", "sk_admin_dev"}
+_DEV_JWT_SECRET = "dev-insecure-jwt-secret-change-me"
 
 # API key required by the LLM provider (ollama is local, needs none).
 _PROVIDER_KEY = {
@@ -89,6 +94,8 @@ def validate_runtime_config(s: Settings) -> list[str]:
         problems.append("A dev placeholder API key is in use; set real secrets")
     if "*" in s.cors_allow_origins:
         problems.append("CORS_ALLOW_ORIGINS is a wildcard '*'")
+    if s.jwt_secret == _DEV_JWT_SECRET or len(s.jwt_secret) < 32:
+        problems.append("JWT_SECRET is the dev default or too short (set a strong secret)")
 
     key_field = _PROVIDER_KEY.get(s.llm_provider)
     if key_field and not getattr(s, key_field):

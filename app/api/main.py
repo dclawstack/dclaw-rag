@@ -9,7 +9,17 @@ from app.api.middleware import (
     RequestContextMiddleware,
     SecurityHeadersMiddleware,
 )
-from app.api.routes import agent, collections, health, ingest, keys, query, stats, system
+from app.api.routes import (
+    agent,
+    auth,
+    collections,
+    health,
+    ingest,
+    keys,
+    query,
+    stats,
+    system,
+)
 from app.core.config import settings, validate_runtime_config
 from app.core.logging import configure_logging
 from app.db.api_key_store import ApiKeyStore
@@ -61,6 +71,7 @@ app.add_middleware(RequestContextMiddleware)
 app.include_router(health.router, tags=["Health"])
 app.include_router(system.router, prefix="/api/v1/rag", tags=["System"])
 app.include_router(stats.router, prefix="/api/v1/rag", tags=["System"])
+app.include_router(auth.router, prefix="/api/v1/rag", tags=["Auth"])
 app.include_router(keys.router, prefix="/api/v1/rag", tags=["Auth"])
 app.include_router(query.router, prefix="/api/v1/rag", tags=["Query"])
 app.include_router(agent.router, prefix="/api/v1/rag", tags=["Agent"])
