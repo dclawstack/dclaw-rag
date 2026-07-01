@@ -106,8 +106,14 @@ export function Copilot() {
           <Sparkles className="h-5 w-5 text-primary" />
           Knowledge Copilot
         </div>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOpen(false)}>
-          <X className="h-4 w-4" />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          aria-label="Close copilot"
+          onClick={() => setOpen(false)}
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
 
@@ -204,8 +210,13 @@ export function Copilot() {
             placeholder="Ask your knowledge base…"
             disabled={loading}
           />
-          <Button type="submit" size="icon" disabled={loading || !input.trim()}>
-            <Send className="h-4 w-4" />
+          <Button
+            type="submit"
+            size="icon"
+            aria-label="Send message"
+            disabled={loading || !input.trim()}
+          >
+            <Send className="h-4 w-4" aria-hidden="true" />
           </Button>
         </form>
       </div>
