@@ -1,0 +1,84 @@
+name: E2E
+
+# Full-stack browser tests (Playwright) over the real backend + worker + frontend.
+# Heavier than CI (real Qdrant/Redis + embedding models), so it runs nightly, on
+# demand, and on PRs that touch the app surface it exercises.
+on:
+  schedule:
+    - cron: "30 6 * * *" # nightly 06:30 UTC
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "app/api/**"
+      - "app/ingestion/**"
+      - ".github/workflows/e2e.yml"
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      qdrant:
+        image: qdrant/qdrant:latest
+        ports:
+          - 6333:6333
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    env:
+      QDRANT_URL: http://localhost:6333
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/1
+      EMBEDDING_DEVICE: cpu
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Cache embedding/rerank models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.cache/fastembed
+          key: rag-models-bge-large-reranker-bm25-v1
+      - name: Install backend
+        run: |
+          pip install uv
+          uv pip install --system torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          uv pip install --system -e ".[dev]"
+      - name: Build frontend
+        working-directory: ./frontend
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8090
+          NEXT_PUBLIC_API_KEY: "" # force the login flow (no dev bypass)
+        run: |
+          npm ci
+          npm run build
+      - name: Install Playwright browser
+        working-directory: ./frontend
+        run: npx playwright install --with-deps chromium
+      - name: Start backend, worker, frontend
+        run: |
+          nohup uvicorn app.api.main:app --host 0.0.0.0 --port 8090 > backend.log 2>&1 &
+          nohup celery -A app.worker.celery_app worker --queues ingestion --concurrency 1 \
+            > worker.log 2>&1 &
+          nohup npm --prefix ./frontend start > frontend.log 2>&1 &
+          for i in $(seq 1 40); do
+            curl -sf http://localhost:8090/health > /dev/null && break || sleep 2
+          done
+          for i in $(seq 1 40); do
+            curl -sf http://localhost:3003 > /dev/null && break || sleep 2
+          done
+          echo "backend + frontend up"
+      - name: Run E2E
+        working-directory: ./frontend
+        run: npm run e2e
+      - name: Dump logs on failure
+        if: failure()
+        run: tail -n 100 backend.log worker.log frontend.log || true
