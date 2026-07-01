@@ -22,6 +22,11 @@ INGEST_ENQUEUED = Counter(
     "rag_ingest_enqueued_total",
     "Documents enqueued for ingestion",
 )
+QUERY_CACHE = Counter(
+    "rag_query_cache_total",
+    "Query cache lookups",
+    ["result"],
+)
 
 
 def render() -> tuple[bytes, str]:

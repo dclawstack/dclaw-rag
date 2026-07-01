@@ -7,6 +7,7 @@ from app.db.api_key_store import ApiKeyStore
 from app.db.collection_store import CollectionStore
 from app.db.document_store import DocumentStore
 from app.db.qdrant_store import QdrantStore
+from app.db.query_cache import QueryCache
 from app.db.rate_limiter import RateLimiter
 from app.db.refresh_token_store import RefreshTokenStore
 from app.db.usage_store import UsageStore
@@ -74,6 +75,12 @@ async def get_usage_store(request: Request) -> UsageStore:
     if not hasattr(request.app.state, "usage_store"):
         request.app.state.usage_store = UsageStore()
     return request.app.state.usage_store
+
+
+async def get_query_cache(request: Request) -> QueryCache:
+    if not hasattr(request.app.state, "query_cache"):
+        request.app.state.query_cache = QueryCache()
+    return request.app.state.query_cache
 
 
 class Principal:
