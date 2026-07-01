@@ -7,6 +7,7 @@ from app.db.collection_store import CollectionStore
 from app.db.document_store import DocumentStore
 from app.db.qdrant_store import QdrantStore
 from app.db.rate_limiter import RateLimiter
+from app.db.refresh_token_store import RefreshTokenStore
 from app.db.user_store import UserStore
 from app.generation.llm_gateway import LLMGateway, get_llm_gateway
 from app.ingestion.pipeline import IngestionPipeline
@@ -59,6 +60,12 @@ async def get_user_store(request: Request) -> UserStore:
     if not hasattr(request.app.state, "user_store"):
         request.app.state.user_store = UserStore()
     return request.app.state.user_store
+
+
+async def get_refresh_token_store(request: Request) -> RefreshTokenStore:
+    if not hasattr(request.app.state, "refresh_token_store"):
+        request.app.state.refresh_token_store = RefreshTokenStore()
+    return request.app.state.refresh_token_store
 
 
 class Principal:

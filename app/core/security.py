@@ -37,11 +37,33 @@ def create_access_token(*, user_id: str, tenant_id: str, email: str) -> str:
     return jwt.encode(payload, settings.jwt_secret, algorithm=_ALGORITHM)
 
 
-def decode_access_token(token: str) -> dict[str, Any] | None:
-    """Return the claims for a valid access token, else None (bad signature,
-    expired, malformed, or wrong type)."""
+def create_refresh_token(*, user_id: str, tenant_id: str, email: str, jti: str) -> str:
+    now = datetime.now(tz=UTC)
+    payload = {
+        "sub": user_id,
+        "tenant_id": tenant_id,
+        "email": email,
+        "type": "refresh",
+        "jti": jti,
+        "iat": now,
+        "exp": now + timedelta(days=settings.jwt_refresh_token_expire_days),
+    }
+    return jwt.encode(payload, settings.jwt_secret, algorithm=_ALGORITHM)
+
+
+def _decode(token: str, expected_type: str) -> dict[str, Any] | None:
     try:
         claims = jwt.decode(token, settings.jwt_secret, algorithms=[_ALGORITHM])
     except jwt.PyJWTError:
         return None
-    return claims if claims.get("type") == "access" else None
+    return claims if claims.get("type") == expected_type else None
+
+
+def decode_access_token(token: str) -> dict[str, Any] | None:
+    """Claims for a valid access token, else None (bad/expired/wrong-type)."""
+    return _decode(token, "access")
+
+
+def decode_refresh_token(token: str) -> dict[str, Any] | None:
+    """Claims for a valid refresh token, else None."""
+    return _decode(token, "refresh")

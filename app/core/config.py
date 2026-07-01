@@ -16,9 +16,12 @@ class Settings(BaseSettings):
     bootstrap_tenant: str = "default"
     admin_api_key: str | None = None
 
-    # End-user auth (email+password -> JWT). jwt_secret signs access tokens.
+    # End-user auth (email+password -> JWT). jwt_secret signs the tokens.
+    # Access tokens are short-lived and stateless; refresh tokens are long-lived,
+    # stored in Redis, and revocable (logout / rotation / revoke-all).
     jwt_secret: str = "dev-insecure-jwt-secret-change-me"
-    jwt_access_token_expire_minutes: int = 720  # 12h
+    jwt_access_token_expire_minutes: int = 30
+    jwt_refresh_token_expire_days: int = 30
 
     embedding_model: str = "BAAI/bge-large-en-v1.5"
     embedding_device: str = "cpu"
