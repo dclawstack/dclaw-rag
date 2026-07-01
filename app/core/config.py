@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     abstain_threshold: float = 0.2
     verify_answers: bool = True
 
+    # Per-tenant query response cache TTL (seconds); 0 disables. Invalidated
+    # immediately when the tenant ingests a document (cache version bump).
+    query_cache_ttl_seconds: int = 300
+
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
 

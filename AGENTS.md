@@ -31,6 +31,10 @@ questions and get cited, LLM-synthesized answers.
   `app/db/qdrant_store.py`.
 - **Collections** are lightweight metadata records persisted in **Redis**
   (`app/db/collection_store.py`); documents are associated via `metadata.collection_id`.
+- **Query caching** (`app/db/query_cache.py`): `/query` responses are cached per tenant in
+  Redis (TTL `query_cache_ttl_seconds`); a hit skips retrieval + the LLM. Keys embed a
+  per-tenant version that the worker bumps when a document finishes ingesting, so new data
+  invalidates cached answers instantly. `rag_query_cache_total{result}` on `/metrics`.
 - **Documents** are tracked in a **Redis registry** (`app/db/document_store.py`) — the
   source of truth for document listing/counts and ingestion **status** (pending →
   processing → ready/failed). Qdrant holds the chunks; tenant/collection/doc payload

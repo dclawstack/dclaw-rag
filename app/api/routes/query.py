@@ -8,10 +8,12 @@ from app.api.dependencies import (
     enforce_rate_limit,
     get_llm,
     get_principal,
+    get_query_cache,
     get_searcher,
 )
 from app.core import metrics
 from app.core.config import settings
+from app.db.query_cache import QueryCache
 from app.generation.llm_gateway import LLMGateway
 from app.generation.synthesis import (
     build_citations,
@@ -40,13 +42,27 @@ async def query(
     request: QueryRequest,
     searcher: Searcher = Depends(get_searcher),
     llm: LLMGateway = Depends(get_llm),
+    cache: QueryCache = Depends(get_query_cache),
     principal: Principal = Depends(get_principal),
 ) -> QueryResponse:
     start = time.perf_counter()
+    tenant = principal.tenant_id
+
+    cache_params = {
+        "q": request.question,
+        "top_k": request.top_k,
+        "collection_id": request.collection_id,
+        "verify": request.verify,
+    }
+    cached = cache.get(tenant, cache_params)
+    if cached is not None:
+        metrics.QUERY_CACHE.labels("hit").inc()
+        return QueryResponse(**cached)
+    metrics.QUERY_CACHE.labels("miss").inc()
 
     # tenant comes from the authenticated principal, never the request body
     filters = request.filters.copy()
-    filters["tenant_id"] = principal.tenant_id
+    filters["tenant_id"] = tenant
     if request.collection_id:
         filters["collection_id"] = request.collection_id
 
@@ -68,7 +84,7 @@ async def query(
             retrieval_ms=retrieval_ms,
             total_ms=_elapsed_ms(start),
         )
-        return QueryResponse(
+        response = QueryResponse(
             query=request.question,
             answer=ABSTAIN_MESSAGE,
             results=retrieved,
@@ -78,6 +94,8 @@ async def query(
             abstained=True,
             latency_ms=_elapsed_ms(start),
         )
+        cache.set(tenant, cache_params, response.model_dump(mode="json"))
+        return response
 
     t_generation = time.perf_counter()
     prompt = render_rag_prompt(chunks, request.question)
@@ -105,7 +123,7 @@ async def query(
         generation_ms=round((time.perf_counter() - t_generation) * 1000, 1),
         total_ms=_elapsed_ms(start),
     )
-    return QueryResponse(
+    response = QueryResponse(
         query=request.question,
         answer=answer,
         results=retrieved,
@@ -117,6 +135,8 @@ async def query(
         unsupported_claims=unsupported_claims,
         latency_ms=_elapsed_ms(start),
     )
+    cache.set(tenant, cache_params, response.model_dump(mode="json"))
+    return response
 
 
 def _elapsed_ms(start: float) -> float:

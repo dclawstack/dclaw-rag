@@ -32,7 +32,16 @@ def _process(doc_id: str, text: str, request_dict: dict, store, pipeline) -> Non
 
 @celery_app.task(name="ingest_document", bind=True, max_retries=2, default_retry_delay=10)
 def ingest_document_task(self, doc_id: str, text: str, request_dict: dict) -> None:
+    import contextlib
+
     from app.db.document_store import DocumentStore
+    from app.db.query_cache import QueryCache
     from app.ingestion.pipeline import IngestionPipeline
 
     _process(doc_id, text, request_dict, DocumentStore(), IngestionPipeline())
+
+    # New chunks are now queryable — invalidate the tenant's cached answers.
+    tenant = request_dict.get("tenant_id")
+    if tenant:
+        with contextlib.suppress(Exception):
+            QueryCache().bump_version(tenant)
