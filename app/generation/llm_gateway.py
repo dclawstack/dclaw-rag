@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 
 import structlog
 
+from app.core import metering
 from app.core.config import settings
 from app.core.exceptions import GenerationError
 
@@ -37,6 +38,9 @@ class OpenAIGateway(LLMGateway):
                 messages=messages,  # type: ignore[arg-type]  # plain dicts; OpenAI wants typed message params
                 temperature=temperature,
             )
+            usage = getattr(response, "usage", None)
+            if usage:
+                metering.record(self.model, usage.prompt_tokens, usage.completion_tokens)
             return response.choices[0].message.content or ""
         except Exception as exc:
             raise GenerationError(f"OpenAI completion failed: {exc}") from exc
@@ -64,6 +68,9 @@ class AnthropicGateway(LLMGateway):
             kwargs["system"] = system
         try:
             response = await self.client.messages.create(**kwargs)
+            usage = getattr(response, "usage", None)
+            if usage:
+                metering.record(self.model, usage.input_tokens, usage.output_tokens)
             return response.content[0].text if response.content else ""
         except Exception as exc:
             raise GenerationError(f"Anthropic completion failed: {exc}") from exc
@@ -89,7 +96,13 @@ class OllamaGateway(LLMGateway):
                     },
                 )
                 response.raise_for_status()
-                return response.json().get("message", {}).get("content", "")
+                data = response.json()
+                metering.record(
+                    self.model,
+                    data.get("prompt_eval_count", 0),
+                    data.get("eval_count", 0),
+                )
+                return data.get("message", {}).get("content", "")
         except Exception as exc:
             raise GenerationError(f"Ollama completion failed: {exc}") from exc
 

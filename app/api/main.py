@@ -19,6 +19,7 @@ from app.api.routes import (
     query,
     stats,
     system,
+    usage,
 )
 from app.core.config import settings, validate_runtime_config
 from app.core.logging import configure_logging
@@ -71,6 +72,7 @@ app.add_middleware(RequestContextMiddleware)
 app.include_router(health.router, tags=["Health"])
 app.include_router(system.router, prefix="/api/v1/rag", tags=["System"])
 app.include_router(stats.router, prefix="/api/v1/rag", tags=["System"])
+app.include_router(usage.router, prefix="/api/v1/rag", tags=["System"])
 app.include_router(auth.router, prefix="/api/v1/rag", tags=["Auth"])
 app.include_router(keys.router, prefix="/api/v1/rag", tags=["Auth"])
 app.include_router(query.router, prefix="/api/v1/rag", tags=["Query"])
