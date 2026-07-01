@@ -58,6 +58,12 @@ questions and get cited, LLM-synthesized answers.
   status, duration). Prometheus at **`GET /metrics`** (HTTP counter/histogram + RAG query/
   ingest counters); the query route logs per-stage (retrieval/generation) latency.
   **`GET /health/ready`** checks Redis + Qdrant (503 if down); `GET /health` is liveness.
+- **Usage/cost metering** (`app/core/metering.py`, `app/db/usage_store.py`): the LLM gateways
+  report token usage against the caller's tenant (carried on a contextvar set in
+  `get_principal`). Aggregate token/cost counters go to Prometheus (labelled by model — not
+  tenant, to bound cardinality); per-tenant totals accrue in Redis and are read via
+  **`GET /usage`**. Pricing is configurable (`llm_price_per_1k_*_usd`). Metering is
+  best-effort — it never fails a request.
 - **Logging:** `structlog` (`app/core/logging.py`) — no `print()`, and never log key values.
 
 ### Frontend (`frontend/`)

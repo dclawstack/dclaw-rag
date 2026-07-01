@@ -1,5 +1,6 @@
 from fastapi import Depends, Header, HTTPException, Request
 
+from app.core import metering
 from app.core.config import settings
 from app.core.security import decode_access_token
 from app.db.api_key_store import ApiKeyStore
@@ -8,6 +9,7 @@ from app.db.document_store import DocumentStore
 from app.db.qdrant_store import QdrantStore
 from app.db.rate_limiter import RateLimiter
 from app.db.refresh_token_store import RefreshTokenStore
+from app.db.usage_store import UsageStore
 from app.db.user_store import UserStore
 from app.generation.llm_gateway import LLMGateway, get_llm_gateway
 from app.ingestion.pipeline import IngestionPipeline
@@ -68,6 +70,12 @@ async def get_refresh_token_store(request: Request) -> RefreshTokenStore:
     return request.app.state.refresh_token_store
 
 
+async def get_usage_store(request: Request) -> UsageStore:
+    if not hasattr(request.app.state, "usage_store"):
+        request.app.state.usage_store = UsageStore()
+    return request.app.state.usage_store
+
+
 class Principal:
     """The authenticated caller — an end user (JWT) or a machine (API key)."""
 
@@ -100,17 +108,20 @@ async def get_principal(
     # A Bearer token may be a user JWT or a machine API key — try JWT first.
     claims = decode_access_token(raw)
     if claims:
-        return Principal(
+        principal = Principal(
             tenant_id=claims["tenant_id"],
             user_id=claims.get("sub"),
             email=claims.get("email"),
         )
+    else:
+        record = store.get(raw)
+        if not record:
+            raise HTTPException(status_code=401, detail="Invalid or expired credentials")
+        principal = Principal(tenant_id=record["tenant_id"], key_name=record.get("name", ""))
 
-    record = store.get(raw)
-    if record:
-        return Principal(tenant_id=record["tenant_id"], key_name=record.get("name", ""))
-
-    raise HTTPException(status_code=401, detail="Invalid or expired credentials")
+    # Attribute any LLM usage in this request to the caller's tenant.
+    metering.current_tenant.set(principal.tenant_id)
+    return principal
 
 
 async def get_rate_limiter(request: Request) -> RateLimiter:

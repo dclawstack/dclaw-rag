@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     reranker_model: str = "BAAI/bge-reranker-base"
     reranker_top_k: int = 10
 
+    # LLM pricing for usage/cost metering (USD per 1K tokens). Defaults are
+    # Sonnet-tier; set these to match your configured model/provider.
+    llm_price_per_1k_input_usd: float = 0.003
+    llm_price_per_1k_output_usd: float = 0.015
+
     # Trust controls: abstain when the top reranked chunk scores below this
     # (cross-encoder relevance in [0,1]; relevant hits score ~0.7-1.0, irrelevant
     # ~0.0), and verify answers against their sources.
