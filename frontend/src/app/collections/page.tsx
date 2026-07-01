@@ -209,10 +209,11 @@ export default function CollectionsPage() {
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label={`Delete collection ${collection.name}`}
                       onClick={() => handleDelete(collection.id)}
                       disabled={collection.id === "default"}
                     >
-                      <Trash2 className="w-4 h-4 text-destructive" />
+                      <Trash2 className="w-4 h-4 text-destructive" aria-hidden="true" />
                     </Button>
                   </TableCell>
                 </TableRow>

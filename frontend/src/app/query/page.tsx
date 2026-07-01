@@ -171,6 +171,15 @@ export default function QueryPage() {
         </Card>
       )}
 
+      {!result && !loading && (
+        <Card>
+          <CardContent className="p-8 text-center text-sm text-muted-foreground">
+            Ask a question above to get an answer with cited sources from your
+            knowledge base.
+          </CardContent>
+        </Card>
+      )}
+
       {result && !loading && (
         <div className="space-y-4">
           <Card>
