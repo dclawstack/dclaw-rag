@@ -71,7 +71,21 @@ Provision managed **Qdrant** and **Redis** (or run the compose ones).
   Use this for the container/k8s readiness probe (the Docker `HEALTHCHECK` and compose use it).
 - `GET /metrics` — Prometheus exposition (HTTP + RAG counters/histograms).
 
-### 4. Notes
+### 4. Durability & backups
+
+Redis is the source of truth for **users, API keys, collections, and the document
+registry** — treat it as a database, not a cache.
+
+- **Persistence:** the compose Redis runs with **AOF** (`--appendonly yes`) on a named
+  volume, so data survives restarts. In Kubernetes, point `config.redisUrl` at a **managed
+  Redis with persistence + replication** (or a StatefulSet with a PVC + AOF). Don't run
+  production on an ephemeral Redis.
+- **Backups:** `scripts/backup.py export backup.json` writes a portable logical snapshot of
+  the durable keys (restore with `... restore backup.json`) — run it on a schedule and store
+  the output off-box, in addition to Redis's own persistence.
+- Qdrant holds the vectors; use its snapshot API / a persistent volume for the collection.
+
+### 5. Notes
 
 - **Cold start:** embedding + reranker models (~2.5 GB) download/load lazily on first use.
   Expect a slow first request per replica; pre-warm by hitting `/api/v1/rag/query` after deploy.
