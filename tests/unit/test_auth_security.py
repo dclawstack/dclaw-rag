@@ -1,7 +1,9 @@
 from app.core.config import settings
 from app.core.security import (
     create_access_token,
+    create_refresh_token,
     decode_access_token,
+    decode_refresh_token,
     hash_password,
     verify_password,
 )
@@ -44,3 +46,15 @@ def test_token_signed_with_other_secret_is_rejected(monkeypatch):
     token = create_access_token(user_id="u1", tenant_id="t1", email="a@b.com")
     monkeypatch.setattr(settings, "jwt_secret", "a-different-secret-entirely-xxxxxx")
     assert decode_access_token(token) is None
+
+
+def test_access_and_refresh_types_are_not_interchangeable():
+    access = create_access_token(user_id="u1", tenant_id="t1", email="a@b.com")
+    refresh = create_refresh_token(user_id="u1", tenant_id="t1", email="a@b.com", jti="j1")
+
+    # each decoder only accepts its own token type
+    assert decode_access_token(access) is not None
+    assert decode_refresh_token(access) is None
+    assert decode_refresh_token(refresh) is not None
+    assert decode_access_token(refresh) is None
+    assert decode_refresh_token(refresh)["jti"] == "j1"

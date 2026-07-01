@@ -42,11 +42,13 @@ questions and get cited, LLM-synthesized answers.
   Supported formats live in `app/ingestion/extractors/` + the `loaders` registry (PDF,
   DOCX, HTML, CSV/TSV, Markdown, plaintext).
 - **Generation** (`app/generation/`): `LLMGateway` (OpenAI / Anthropic) + Jinja prompt.
-- **Auth** (`app/core/security.py`, `app/db/user_store.py`, `app/api/routes/auth.py`): two
-  credential types resolve to a tenant via `get_principal` — **end-user JWTs** (email+password
-  signup/login, argon2 hashes in Redis; each signup gets its own tenant) and **machine API
-  keys** (admin-minted). `/api/v1/rag/auth/{register,login,refresh,me}`. The frontend stores
-  the JWT and an `AuthGate` guards the app; `NEXT_PUBLIC_API_KEY` is a dev bypass.
+- **Auth** (`app/core/security.py`, `app/db/user_store.py`, `app/db/refresh_token_store.py`,
+  `app/api/routes/auth.py`): two credential types resolve to a tenant via `get_principal` —
+  **end-user JWTs** (email+password signup/login, argon2 hashes in Redis; each signup gets its
+  own tenant) and **machine API keys** (admin-minted). Access tokens are short-lived and
+  stateless; **refresh tokens are stored in Redis and revocable** — `/auth/refresh` rotates,
+  `/auth/logout` revokes the session, `/auth/logout-all` revokes every session. The frontend
+  stores both tokens and silently refreshes on a 401; `NEXT_PUBLIC_API_KEY` is a dev bypass.
 - **Security/abuse** (`app/api/middleware.py`, `app/db/rate_limiter.py`): per-tenant rate limit
   on query/agent/ingest (429 + `Retry-After`); request-body and upload size caps (413);
   security headers on every response; request schemas carry length/range bounds. Limits live

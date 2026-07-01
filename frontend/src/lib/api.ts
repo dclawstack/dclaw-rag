@@ -1,4 +1,4 @@
-import { clearToken, getToken } from "./auth";
+import { clearToken, getToken, refreshAccessToken } from "./auth";
 import { API_BASE, API_KEY } from "./tokens";
 
 // Prefer the logged-in user's JWT; fall back to the dev API key if configured.
@@ -7,11 +7,9 @@ const authHeaders = (): Record<string, string> => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-function handleUnauthorized(status: number) {
-  if (status === 401 && typeof window !== "undefined") {
-    clearToken();
-    window.location.href = "/login";
-  }
+function redirectToLogin() {
+  clearToken();
+  if (typeof window !== "undefined") window.location.href = "/login";
 }
 
 export interface ChunkMetadata {
@@ -72,7 +70,7 @@ export interface Document {
   error: string | null;
 }
 
-async function apiFetch(path: string, options?: RequestInit) {
+async function apiFetch(path: string, options?: RequestInit, retried = false) {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
@@ -81,10 +79,12 @@ async function apiFetch(path: string, options?: RequestInit) {
       ...options?.headers,
     },
   });
-  if (!res.ok) {
-    handleUnauthorized(res.status);
-    throw new Error(`API error: ${res.status}`);
+  if (res.status === 401 && !retried) {
+    // access token likely expired — try a silent refresh, then retry once
+    if (await refreshAccessToken()) return apiFetch(path, options, true);
+    redirectToLogin();
   }
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
 
@@ -157,24 +157,23 @@ export async function agentQuery(params: {
 
 export async function ingestFile(
   file: File,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
+  retried = false
 ) {
   const formData = new FormData();
   formData.append("file", file);
   if (metadata) formData.append("metadata", JSON.stringify(metadata));
 
-  const res = await fetch(
-    `${API_BASE}/api/v1/rag/documents/upload`,
-    {
-      method: "POST",
-      body: formData,
-      headers: authHeaders(),
-    }
-  );
-  if (!res.ok) {
-    handleUnauthorized(res.status);
-    throw new Error(`Upload error: ${res.status}`);
+  const res = await fetch(`${API_BASE}/api/v1/rag/documents/upload`, {
+    method: "POST",
+    body: formData,
+    headers: authHeaders(),
+  });
+  if (res.status === 401 && !retried) {
+    if (await refreshAccessToken()) return ingestFile(file, metadata, true);
+    redirectToLogin();
   }
+  if (!res.ok) throw new Error(`Upload error: ${res.status}`);
   return res.json();
 }
 
