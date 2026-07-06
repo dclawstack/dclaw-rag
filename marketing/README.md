@@ -20,11 +20,6 @@ npm run dev     # http://localhost:3009
 Provisioned automatically by the Neon integration on Vercel. Without it, the
 form returns a friendly 503.
 
-`NEXT_PUBLIC_APP_URL` — public URL of the hosted app UI (see `../DEPLOY.md`
-§ Render). When set, the nav and hero show "Launch app" links; when unset,
-they fall back to the GitHub repo. Baked at build time — redeploy after
-changing it.
-
 ## Deploy
 
 Configured for Vercel. The Vercel project root must be `marketing/`.
