@@ -45,6 +45,11 @@ const STEPS = [
   },
 ];
 
+// Public URL of the hosted app UI (see DEPLOY.md § Render). Until it's set,
+// the "Launch app" buttons fall back to the GitHub repo.
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL;
+const GITHUB_URL = "https://github.com/dclawstack/dclaw-rag";
+
 export default function HomePage() {
   return (
     <>
@@ -53,12 +58,20 @@ export default function HomePage() {
           <span className="text-lg font-semibold text-white">
             DClaw <span className="text-brand-500">RAG</span>
           </span>
-          <a
-            href="#waitlist"
-            className="rounded-pill bg-brand-500 px-4 py-2 text-sm font-semibold text-ink transition hover:bg-brand-400"
-          >
-            Join the waitlist
-          </a>
+          <div className="flex items-center gap-3">
+            <a
+              href={APP_URL ?? GITHUB_URL}
+              className="rounded-pill border border-white/15 px-4 py-2 text-sm font-semibold text-white transition hover:border-brand-500 hover:text-brand-400"
+            >
+              {APP_URL ? "Launch app" : "View on GitHub"}
+            </a>
+            <a
+              href="#waitlist"
+              className="rounded-pill bg-brand-500 px-4 py-2 text-sm font-semibold text-ink transition hover:bg-brand-400"
+            >
+              Join the waitlist
+            </a>
+          </div>
         </div>
       </header>
 
@@ -78,6 +91,29 @@ export default function HomePage() {
             <div className="mx-auto mt-10 max-w-md">
               <WaitlistForm />
             </div>
+            <p className="mt-6 text-sm text-meta">
+              {APP_URL ? (
+                <>
+                  Already have access?{" "}
+                  <a
+                    href={APP_URL}
+                    className="font-semibold text-brand-400 transition hover:text-brand-300"
+                  >
+                    Launch the app →
+                  </a>
+                </>
+              ) : (
+                <>
+                  Prefer to self-host?{" "}
+                  <a
+                    href={GITHUB_URL}
+                    className="font-semibold text-brand-400 transition hover:text-brand-300"
+                  >
+                    Get the code on GitHub →
+                  </a>
+                </>
+              )}
+            </p>
           </div>
         </section>
 

@@ -94,6 +94,44 @@ registry** — treat it as a database, not a cache.
   is its own tenant) or a **machine API key** minted with the admin key. The browser uses the
   JWT; `NEXT_PUBLIC_API_KEY` is a dev bypass — leave it unset in production so the UI requires
   login.
+
+## Render + Vercel + Qdrant Cloud (demo/small-team stack)
+
+Same shape as dclaw-flow's deploy (Render backend, Vercel frontend), adapted for
+RAG's extra services. `render.yaml` is the Blueprint. Order: **Qdrant → Render →
+Vercel frontend → back-fill CORS**.
+
+| Piece | Host | Plan |
+|-------|------|------|
+| Vectors | **Qdrant Cloud** | Free 1 GB cluster (cloud.qdrant.io) |
+| Redis | **Render Key Value** | Free 25 MB (created by the Blueprint) |
+| API + Celery worker | **Render** | Docker web service, **Standard (2 GB)** — see RAM note |
+| App frontend | **Vercel** | Hobby |
+| Landing page | **Vercel** | Already live (`marketing/`, https://dclaw-rag.vercel.app) |
+
+1. **Qdrant Cloud:** create a free cluster; note the URL and API key.
+2. **Render:** New → Blueprint → connect this repo. Render reads `render.yaml`
+   (service `dclaw-rag-api` + key value `dclaw-rag-redis`). Set the `sync: false`
+   vars: `QDRANT_URL`, `QDRANT_API_KEY`, `ANTHROPIC_API_KEY` (or switch
+   `LLM_PROVIDER`), and `CORS_ALLOW_ORIGINS` (placeholder now, back-filled in
+   step 4). `ADMIN_API_KEY`/`JWT_SECRET` are generated. Verify
+   `https://<service>.onrender.com/health/ready` → 200 once Redis + Qdrant connect.
+3. **Vercel frontend:** create a project rooted at `frontend/`, set
+   `NEXT_PUBLIC_API_URL` to the Render URL (baked at build — deploy *after*
+   Render is up), deploy. Leave `NEXT_PUBLIC_API_KEY` unset (dev bypass).
+4. **Back-fill CORS:** set `CORS_ALLOW_ORIGINS=["https://<frontend>.vercel.app"]`
+   on Render (JSON list, not comma-separated) — Render redeploys on env change.
+5. **Landing page link:** set `NEXT_PUBLIC_APP_URL` on the `dclaw-rag` Vercel
+   project (marketing site) to the frontend URL so its "Launch app" buttons
+   appear, and redeploy.
+
+**RAM:** the default models need ~2.5 GB, so the Blueprint pins
+`EMBEDDING_MODEL=BAAI/bge-small-en-v1.5` to fit Standard (2 GB). Free/Starter
+(512 MB) will OOM. On a Pro (4 GB) instance, drop the override to get the
+default bge-large quality back. The Celery worker runs inside the API container
+(`dockerCommand`) to avoid paying for a second model-loading service; split it
+out when ingestion volume grows.
+
 ## Kubernetes (Helm)
 
 The chart in `helm/` deploys the backend, worker, and frontend (point it at managed
