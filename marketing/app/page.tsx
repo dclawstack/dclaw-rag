@@ -53,12 +53,20 @@ export default function HomePage() {
           <span className="text-lg font-semibold text-white">
             DClaw <span className="text-brand-500">RAG</span>
           </span>
-          <a
-            href="#waitlist"
-            className="rounded-pill bg-brand-500 px-4 py-2 text-sm font-semibold text-ink transition hover:bg-brand-400"
-          >
-            Join the waitlist
-          </a>
+          <div className="flex items-center gap-3">
+            <a
+              href="https://github.com/dclawstack/dclaw-rag"
+              className="rounded-pill border border-white/15 px-4 py-2 text-sm font-semibold text-white transition hover:border-brand-500 hover:text-brand-400"
+            >
+              View on GitHub
+            </a>
+            <a
+              href="#waitlist"
+              className="rounded-pill bg-brand-500 px-4 py-2 text-sm font-semibold text-ink transition hover:bg-brand-400"
+            >
+              Notify me at launch
+            </a>
+          </div>
         </div>
       </header>
 
@@ -71,9 +79,10 @@ export default function HomePage() {
               <span className="text-brand-500">answering questions.</span>
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-lg text-body sm:text-xl">
-              DClaw RAG ingests any document, retrieves with hybrid search and
-              reranking, and generates grounded answers with citations — as a
-              platform your whole stack can call.
+              DClaw RAG is coming to your desktop — private,
+              retrieval-augmented answers over your own files. Your documents
+              never leave your machine: bring your OpenRouter key, or run a
+              fully local model.
             </p>
             <div className="mx-auto mt-10 max-w-md">
               <WaitlistForm />
@@ -126,11 +135,17 @@ export default function HomePage() {
         <section id="waitlist" className="border-t border-white/10 py-24">
           <div className="container-page text-center">
             <h2 className="text-3xl font-bold text-white">
-              Get early access
+              Get notified when the desktop app ships
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-body">
-              We are onboarding teams in waves. Leave your email and we will
-              reach out when your slot opens.
+              Leave your email and we will let you know the moment the macOS,
+              Windows, and Linux builds are ready. Prefer it today?{" "}
+              <a
+                href="https://github.com/dclawstack/dclaw-rag"
+                className="font-semibold text-brand-400 transition hover:text-brand-300"
+              >
+                Self-host from GitHub →
+              </a>
             </p>
             <div className="mx-auto mt-8 max-w-md">
               <WaitlistForm />

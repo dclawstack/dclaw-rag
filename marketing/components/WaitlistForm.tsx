@@ -27,8 +27,8 @@ export function WaitlistForm() {
       setStatus("success");
       setMessage(
         data.alreadyJoined
-          ? "You're already on the list — we'll be in touch."
-          : "You're on the list! We'll be in touch soon."
+          ? "You're already on the list — we'll email you at launch."
+          : "You're on the list! We'll email you when the desktop app ships."
       );
     } catch {
       setStatus("error");
@@ -63,7 +63,7 @@ export function WaitlistForm() {
         disabled={status === "loading"}
         className="rounded-pill bg-brand-500 px-6 py-3 text-sm font-semibold text-ink transition hover:bg-brand-400 disabled:opacity-60"
       >
-        {status === "loading" ? "Joining…" : "Join waitlist"}
+        {status === "loading" ? "Saving…" : "Notify me at launch"}
       </button>
       {status === "error" && (
         <p className="text-sm text-red-400 sm:absolute sm:mt-14">{message}</p>
