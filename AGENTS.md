@@ -96,6 +96,7 @@ dclaw-rag/
 │   ├── models/schemas.py         # Pydantic v2 request/response models
 │   └── retrieval/                # embedder (dense+sparse), reranker, search (RRF)
 ├── frontend/                     # Next.js app (see its own conventions above)
+├── marketing/                    # standalone landing page (Vercel + Neon waitlist; see its README)
 ├── tests/                        # pytest (unit/ + integration/)
 ├── eval/                         # golden_set.json for the RAG eval harness
 ├── scripts/                      # ingest_folder, evaluate (RAG eval), evaluate_retrieval
