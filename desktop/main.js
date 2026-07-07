@@ -23,6 +23,10 @@ const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 const UI_URL = `http://localhost:${UI_PORT}`;
 const SELF_TEST = process.argv.includes("--self-test");
 
+// Self-test feeds the "mic" by stubbing getUserMedia with a Web Audio stream
+// decoded from the committed voice fixture (see selfTest) — Chromium's
+// fake-capture-from-file flags are unreliable across versions.
+
 const repoRoot = path.resolve(__dirname, "..");
 const children = [];
 let backendLog = "";
@@ -57,7 +61,20 @@ function startBackend() {
         ...process.env,
         APP_MODE: "local",
         BOOTSTRAP_API_KEY: "sk_local",
-        // Desktop UX: don't inherit a stray server-mode .env pointing at Redis.
+        // Cached models must not stall on Hugging Face hub checks (anonymous
+        // rate limits back off for minutes): fail the check fast and fall
+        // back to the local cache; downloads still work when a model is new.
+        HF_HUB_ETAG_TIMEOUT: "5",
+        // Self-tests must never touch the user's real ~/.dclaw-rag data, and
+        // run fully offline (models are cached by the dev/CI environment).
+        ...(SELF_TEST
+          ? {
+              DATA_DIR: fs.mkdtempSync(
+                path.join(require("node:os").tmpdir(), "dclaw-selftest-")
+              ),
+              HF_HUB_OFFLINE: "1",
+            }
+          : {}),
       },
       stdio: ["ignore", "pipe", "pipe"],
     }),
@@ -121,14 +138,201 @@ function stopChildren() {
   }
 }
 
-async function selfTest(win) {
-  await new Promise((r) => setTimeout(r, 3000)); // let the UI settle
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function backendRequest(method, apiPath, body) {
+  return new Promise((resolve, reject) => {
+    const data = body ? JSON.stringify(body) : null;
+    const req = http.request(
+      `${BACKEND_URL}${apiPath}`,
+      {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": "sk_local",
+          ...(data ? { "Content-Length": Buffer.byteLength(data) } : {}),
+        },
+      },
+      (res) => {
+        let raw = "";
+        res.on("data", (d) => (raw += d));
+        res.on("end", () => resolve({ status: res.statusCode, json: JSON.parse(raw || "{}") }));
+      }
+    );
+    req.setTimeout(30_000, () => {
+      req.destroy(new Error(`backend request timed out: ${method} ${apiPath}`));
+    });
+    req.on("error", reject);
+    if (data) req.write(data);
+    req.end();
+  });
+}
+
+async function shot(win, name) {
   const image = await win.webContents.capturePage();
-  const out = path.join(__dirname, "self-test.png");
+  const out = path.join(__dirname, `self-test-${name}.png`);
   fs.writeFileSync(out, image.toPNG());
-  const title = win.webContents.getTitle();
-  log(`self-test: title="${title}" screenshot=${out}`);
-  if (!title || image.isEmpty()) throw new Error("self-test: window is empty");
+  log(`screenshot: ${out}`);
+  return image;
+}
+
+async function waitInPage(win, expr, timeoutMs, what) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const result = await win.webContents.executeJavaScript(expr, true);
+    if (result) {
+      log(`wait satisfied (${what}): ${JSON.stringify(result).slice(0, 300)}`);
+      return result;
+    }
+    await sleep(500);
+  }
+  throw new Error(`self-test: timed out waiting for ${what}`);
+}
+
+async function selfTest(win) {
+  win.webContents.on("console-message", (_e, _lvl, msg) => log(`renderer: ${msg}`));
+  await sleep(3000); // let the dashboard settle
+  const image = await shot(win, "dashboard");
+  if (!win.webContents.getTitle() || image.isEmpty())
+    throw new Error("self-test: window is empty");
+
+  // Ingest a fact through the shell's backend, wait until it's queryable.
+  const fact =
+    "The Zephyr-7 wind turbine uses a magnetic bearing system, which eliminates " +
+    "oil lubrication entirely. Its rotor diameter is 164 meters.";
+  const ingest = await backendRequest("POST", "/api/v1/rag/documents/text", {
+    text: fact,
+    metadata: { source: "self-test", title: "Zephyr-7 spec" },
+  });
+  if (ingest.status !== 200) throw new Error(`self-test: ingest failed (${ingest.status})`);
+  for (let i = 0; ; i++) {
+    const doc = await backendRequest("GET", `/api/v1/rag/documents/${ingest.json.doc_id}`);
+    if (doc.json.status === "ready") break;
+    if (doc.json.status === "failed" || i > 240)
+      throw new Error(`self-test: ingestion did not become ready (${doc.json.status})`);
+    await sleep(1000);
+  }
+
+  // Voice query: the fake mic plays the fixture; click record, stop, and let
+  // /transcribe fill the question box.
+  await win.loadURL(`${UI_URL}/query`);
+  await sleep(2000);
+  // Make the mic "speak" the committed fixture: getUserMedia returns a stream
+  // playing the decoded clip, so record -> /transcribe -> question box runs
+  // exactly as it would for a real user.
+  const clipB64 = fs.readFileSync(path.join(repoRoot, "tests", "fixtures", "voice_query.mp3"))
+    .toString("base64");
+  await win.webContents.executeJavaScript(
+    `(async () => {
+      const bytes = Uint8Array.from(atob("${clipB64}"), (c) => c.charCodeAt(0));
+      const ctx = new AudioContext();
+      const buffer = await ctx.decodeAudioData(bytes.buffer);
+      navigator.mediaDevices.getUserMedia = async () => {
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        const dest = ctx.createMediaStreamDestination();
+        source.connect(dest);
+        source.start();
+        return dest.stream;
+      };
+      return buffer.duration;
+    })()`,
+    true
+  ).then((d) => log(`fixture decoded: ${d.toFixed(1)}s`));
+  // Surface the transcribe response + recorded blob size in the shell log.
+  await win.webContents.executeJavaScript(
+    `(() => {
+      const origFetch = window.fetch;
+      window.fetch = async (...args) => {
+        const res = await origFetch(...args);
+        if (String(args[0]).includes("/transcribe")) {
+          const body = args[1] && args[1].body;
+          const blob = body && body.get && body.get("file");
+          const parsed = await res.clone().json().catch(() => ({}));
+          window.__lastClip = blob;
+          console.log("TRANSCRIBE size=" + (blob ? blob.size : "?") + " result=" + JSON.stringify(parsed));
+        }
+        return res;
+      };
+    })()`,
+    true
+  );
+  const micBtn = `document.querySelector('button[aria-label="Ask by voice"], button[aria-label="Stop recording"]')`;
+  await win.webContents.executeJavaScript(`${micBtn}.click()`, true);
+  await sleep(7000); // fixture is ~5s
+  await win.webContents.executeJavaScript(`${micBtn}.click()`, true);
+  try {
+    await waitInPage(
+      win,
+      `document.getElementById("question").value.toLowerCase().includes("turbine")`,
+      120_000,
+      "voice transcript in the question box"
+    );
+  } catch (err) {
+    await shot(win, "voice-failure");
+    const value = await win.webContents.executeJavaScript(
+      `document.getElementById("question").value`,
+      true
+    );
+    log(`question box at failure: "${value}"`);
+    const b64 = await win.webContents.executeJavaScript(
+      `window.__lastClip ? new Promise(r => { const fr = new FileReader();
+         fr.onload = () => r(fr.result.split(",")[1]); fr.readAsDataURL(window.__lastClip); })
+       : null`,
+      true
+    );
+    if (b64) {
+      const clipPath = path.join(__dirname, "self-test-clip.webm");
+      fs.writeFileSync(clipPath, Buffer.from(b64, "base64"));
+      log(`recorded clip saved: ${clipPath}`);
+    }
+    log(`backend log tail:\n${backendLog.slice(-2000)}`);
+    throw err;
+  }
+  const transcript = await win.webContents.executeJavaScript(
+    `document.getElementById("question").value`,
+    true
+  );
+  log(`voice transcript: "${transcript}"`);
+
+  // Submit the transcribed question and wait for a cited answer.
+  await win.webContents.executeJavaScript(
+    `document.getElementById("question").closest("form").requestSubmit()`,
+    true
+  );
+  try {
+    await waitInPage(
+      win,
+      `(() => {
+        const m = (document.body.innerText.match(/[^\\n]*magnetic bearing[^\\n]*/i) || [""])[0];
+        if (!m) return "";
+        const mic = document.querySelector('button[aria-label="Ask by voice"], button[aria-label="Stop recording"]');
+        return JSON.stringify({
+          match: m,
+          question: (document.getElementById("question") || {}).value,
+          micLabel: mic && mic.getAttribute("aria-label"),
+          citations: (document.body.innerText.match(/Citations \\(\\d+\\)/) || [null])[0],
+        });
+      })()`,
+      180_000,
+      "answer mentioning the ingested fact"
+    );
+  } catch (err) {
+    await shot(win, "answer-failure");
+    const text = await win.webContents.executeJavaScript(
+      `document.body.innerText.slice(0, 1500)`,
+      true
+    );
+    log(`page text at failure:\n${text}`);
+    log(`backend log tail:\n${backendLog.slice(-1500)}`);
+    throw err;
+  }
+  // Screenshot is best-effort evidence: an occluded window can yield a stale
+  // compositor frame — the wait's DOM snapshot above is the authoritative check.
+  win.focus();
+  await sleep(500);
+  await shot(win, "voice-answer");
+  log("self-test: voice query round-trip OK");
 }
 
 async function main() {
@@ -137,7 +341,7 @@ async function main() {
     height: 200,
     frame: false,
     resizable: false,
-    show: !SELF_TEST,
+    show: true, // hidden self-test windows get compositor/CPU-throttled and starve the flow
   });
   loading.loadURL(
     "data:text/html," +
@@ -155,7 +359,7 @@ async function main() {
   const win = new BrowserWindow({
     width: 1280,
     height: 840,
-    show: !SELF_TEST,
+    show: true, // hidden self-test windows get compositor/CPU-throttled and starve the flow
     autoHideMenuBar: true,
   });
 
@@ -185,7 +389,8 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() =>
     main().catch((err) => {
       console.error(err);
-      if (!SELF_TEST) dialog.showErrorBox("DClaw RAG failed to start", String(err.message || err));
+      if (SELF_TEST) console.error(`backend log tail:\n${backendLog.slice(-3000)}`);
+      else dialog.showErrorBox("DClaw RAG failed to start", String(err.message || err));
       app.exit(1);
     })
   );
@@ -194,3 +399,11 @@ if (!app.requestSingleInstanceLock()) {
 app.on("before-quit", stopChildren);
 app.on("window-all-closed", () => app.quit());
 process.on("exit", stopChildren);
+// Signals bypass "exit" handlers — without these, killing the shell would
+// leak the backend/UI child processes.
+for (const sig of ["SIGTERM", "SIGINT"]) {
+  process.on(sig, () => {
+    stopChildren();
+    app.exit(0);
+  });
+}
