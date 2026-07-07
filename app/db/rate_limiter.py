@@ -1,8 +1,7 @@
 import time
 
-import redis
-
 from app.core.config import settings
+from app.db.backend import make_kv
 
 
 class RateLimiter:
@@ -15,7 +14,7 @@ class RateLimiter:
     WINDOW_SECONDS = 60
 
     def __init__(self, limit_per_minute: int | None = None) -> None:
-        self._redis = redis.from_url(settings.redis_url, decode_responses=True)
+        self._redis = make_kv()
         self.limit = (
             settings.rate_limit_per_minute if limit_per_minute is None else limit_per_minute
         )

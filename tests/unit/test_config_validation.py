@@ -54,3 +54,38 @@ def test_configured_provider_key_passes():
     assert validate_runtime_config(
         _settings(llm_provider="openai", openai_api_key="sk-real")
     ) == []
+
+
+# --- local-mode profile ---
+
+
+def test_local_profile_defaults():
+    s = Settings(_env_file=None, app_mode="local", data_dir="/tmp/dclaw-test")
+    assert s.rate_limit_per_minute == 0
+    assert s.embedding_model == "BAAI/bge-small-en-v1.5"
+    assert s.embedding_dim == 384
+    assert s.bootstrap_api_key == "sk_local"
+    assert str(s.sqlite_path) == "/tmp/dclaw-test/kv.sqlite3"
+    assert str(s.qdrant_path) == "/tmp/dclaw-test/qdrant"
+
+
+def test_local_profile_explicit_values_win():
+    s = Settings(
+        _env_file=None,
+        app_mode="local",
+        rate_limit_per_minute=5,
+        embedding_model="BAAI/bge-large-en-v1.5",
+        bootstrap_api_key="sk_custom",
+    )
+    assert s.rate_limit_per_minute == 5
+    assert s.embedding_model == "BAAI/bge-large-en-v1.5"
+    assert s.embedding_dim == 1024
+    assert s.bootstrap_api_key == "sk_custom"
+
+
+def test_server_mode_keeps_existing_defaults():
+    s = Settings(_env_file=None)
+    assert s.app_mode == "server"
+    assert s.rate_limit_per_minute == 60
+    assert s.embedding_model == "BAAI/bge-large-en-v1.5"
+    assert s.embedding_dim == 1024

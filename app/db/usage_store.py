@@ -1,13 +1,11 @@
-import redis
-
-from app.core.config import settings
+from app.db.backend import make_kv
 
 
 class UsageStore:
     """Per-tenant LLM usage totals in Redis (tokens + cost), for billing/metering."""
 
     def __init__(self) -> None:
-        self._redis = redis.from_url(settings.redis_url, decode_responses=True)
+        self._redis = make_kv()
 
     def _tokens_key(self, tenant_id: str) -> str:
         return f"usage:{tenant_id}:tokens"

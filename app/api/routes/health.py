@@ -1,9 +1,8 @@
-import redis
 from fastapi import APIRouter, Response
-from qdrant_client import QdrantClient
 
 from app.core import metrics
 from app.core.config import settings
+from app.db.backend import get_qdrant_client, make_kv
 from app.models.schemas import HealthResponse
 
 router = APIRouter()
@@ -15,17 +14,16 @@ async def health() -> HealthResponse:
     return HealthResponse(status="ok")
 
 
-def _check_redis() -> bool:
+def _check_kv() -> bool:
     try:
-        return bool(redis.from_url(settings.redis_url).ping())
+        return bool(make_kv().ping())
     except Exception:
         return False
 
 
 def _check_qdrant() -> bool:
     try:
-        client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key or None)
-        client.get_collections()
+        get_qdrant_client().get_collections()
         return True
     except Exception:
         return False
@@ -33,8 +31,10 @@ def _check_qdrant() -> bool:
 
 @router.get("/health/ready")
 async def ready(response: Response) -> dict:
-    """Readiness: dependencies (Redis, Qdrant) are reachable. 503 if not."""
-    checks = {"redis": _check_redis(), "qdrant": _check_qdrant()}
+    """Readiness: the KV store (Redis / local SQLite) and Qdrant are reachable.
+    503 if not."""
+    kv_name = "kv" if settings.app_mode == "local" else "redis"
+    checks = {kv_name: _check_kv(), "qdrant": _check_qdrant()}
     ok = all(checks.values())
     response.status_code = 200 if ok else 503
     return {"status": "ready" if ok else "not ready", "checks": checks}

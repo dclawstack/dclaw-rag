@@ -31,7 +31,7 @@ async def test_request_id_is_echoed_when_provided(client):
 
 
 async def test_ready_returns_200_when_deps_up(client, monkeypatch):
-    monkeypatch.setattr(health_module, "_check_redis", lambda: True)
+    monkeypatch.setattr(health_module, "_check_kv", lambda: True)
     monkeypatch.setattr(health_module, "_check_qdrant", lambda: True)
 
     resp = await client.get("/health/ready")
@@ -42,7 +42,7 @@ async def test_ready_returns_200_when_deps_up(client, monkeypatch):
 
 
 async def test_ready_returns_503_when_a_dep_is_down(client, monkeypatch):
-    monkeypatch.setattr(health_module, "_check_redis", lambda: True)
+    monkeypatch.setattr(health_module, "_check_kv", lambda: True)
     monkeypatch.setattr(health_module, "_check_qdrant", lambda: False)
 
     resp = await client.get("/health/ready")

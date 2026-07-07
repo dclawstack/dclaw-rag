@@ -46,6 +46,35 @@ jobs:
       - name: Run tests (with coverage gate)
         run: python -m pytest --tb=short --cov=app --cov-report=term-missing --cov-fail-under=80
 
+  local-mode-e2e:
+    # Boots the full API in APP_MODE=local (SQLite KV + embedded Qdrant +
+    # inline ingestion, real embedding/reranker models) and runs an
+    # ingest -> query round-trip with zero external services.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Cache embedding/reranker models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.cache/fastembed
+          key: hf-models-local-mode-v1
+      - name: Install uv
+        run: pip install uv
+      - name: Install CPU-only torch
+        run: uv pip install --system torch torchvision --index-url https://download.pytorch.org/whl/cpu
+      - name: Install dependencies
+        run: uv pip install --system -e ".[dev]"
+      - name: Local-mode e2e (zero external services)
+        env:
+          LOCAL_MODE_E2E: "1"
+        run: python -m pytest tests/integration/test_local_mode.py -v
+        timeout-minutes: 25
+
   frontend-build:
     runs-on: ubuntu-latest
     steps:

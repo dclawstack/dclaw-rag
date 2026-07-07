@@ -40,7 +40,7 @@ def enqueued(monkeypatch):
     """Spy on task dispatch so no broker is touched."""
     calls = []
     monkeypatch.setattr(
-        ingest_module.ingest_document_task, "delay", lambda *a, **k: calls.append(a)
+        ingest_module, "dispatch_ingestion", lambda *a, **k: calls.append(a)
     )
     return calls
 

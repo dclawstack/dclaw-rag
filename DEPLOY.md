@@ -23,6 +23,35 @@ docker compose up --build
 
 Compose runs with `APP_ENV=dev`, so the production config checks below are not enforced.
 
+## Local mode (zero external services)
+
+`APP_MODE=local` runs the whole backend as a **single process with no Redis, no
+Qdrant server, and no Celery** — the profile behind the desktop-app distribution:
+
+- **KV state** (API keys, users, collections, document registry, usage, query cache)
+  lives in SQLite at `~/.dclaw-rag/kv.sqlite3`.
+- **Vectors** live in an embedded (file-based) Qdrant at `~/.dclaw-rag/qdrant`.
+  The embedded store locks its directory — run exactly one API process per data dir.
+- **Ingestion** runs inline on a single background thread; the pending →
+  processing → ready/failed lifecycle (and the UI's polling) is unchanged.
+- **Defaults** (each overridable via env): embeddings switch to
+  `BAAI/bge-small-en-v1.5` (384-dim — the collection dimension is fixed at
+  creation, so don't switch models against an existing data dir), rate limiting
+  is off, and the API key `sk_local` is seeded at startup.
+
+```bash
+APP_MODE=local uvicorn app.api.main:app --port 8090
+# frontend: NEXT_PUBLIC_API_URL=http://localhost:8090 NEXT_PUBLIC_API_KEY=sk_local
+cd frontend && npm run dev
+```
+
+`DATA_DIR` moves the state root. For answers you still need an LLM:
+`LLM_PROVIDER=openrouter` + `OPENROUTER_API_KEY` (bring-your-own-key), or
+`LLM_PROVIDER=ollama` for a fully local stack. `/health/ready` reports
+`{"kv": ..., "qdrant": ...}` in this mode. CI exercises the full local-mode
+ingest → query round-trip in the `local-mode-e2e` job
+(`tests/integration/test_local_mode.py`, gated by `LOCAL_MODE_E2E=1`).
+
 ## Production
 
 ### 1. Configuration (fail-fast)

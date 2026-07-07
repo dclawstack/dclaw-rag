@@ -2,16 +2,14 @@ import hashlib
 import json
 import secrets
 
-import redis
-
-from app.core.config import settings
+from app.db.backend import make_kv
 
 
 class ApiKeyStore:
     """Maps API keys to tenants, stored in Redis. Keys are stored hashed."""
 
     def __init__(self) -> None:
-        self._redis = redis.from_url(settings.redis_url, decode_responses=True)
+        self._redis = make_kv()
 
     @staticmethod
     def _hash(raw_key: str) -> str:

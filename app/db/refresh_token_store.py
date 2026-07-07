@@ -1,8 +1,7 @@
 import secrets
 
-import redis
-
 from app.core.config import settings
+from app.db.backend import make_kv
 
 
 class RefreshTokenStore:
@@ -14,7 +13,7 @@ class RefreshTokenStore:
     """
 
     def __init__(self) -> None:
-        self._redis = redis.from_url(settings.redis_url, decode_responses=True)
+        self._redis = make_kv()
         self._ttl = settings.jwt_refresh_token_expire_days * 24 * 3600
 
     def _key(self, jti: str) -> str:
