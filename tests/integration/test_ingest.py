@@ -112,3 +112,13 @@ async def test_document_status_endpoint_is_tenant_scoped(client, store):
     # another tenant cannot read it
     app.dependency_overrides[get_principal] = lambda: Principal(tenant_id="other")
     assert (await client.get("/api/v1/rag/documents/doc-1")).status_code == 404
+
+
+async def test_upload_binary_unknown_type_is_422(client, store, enqueued):
+    resp = await client.post(
+        UPLOAD_PATH,
+        files={"file": ("blob.bin", b"\x00\x01\x02\x03garbage", "application/octet-stream")},
+    )
+    assert resp.status_code == 422
+    assert "Unsupported" in resp.json()["detail"]
+    assert not enqueued

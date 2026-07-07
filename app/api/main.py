@@ -23,6 +23,7 @@ from app.api.routes import (
     usage,
 )
 from app.core.config import settings, validate_runtime_config
+from app.core.exceptions import IngestionError
 from app.core.logging import configure_logging
 from app.db.api_key_store import ApiKeyStore
 
@@ -58,6 +59,15 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(IngestionError)
+async def ingestion_error_handler(request, exc: IngestionError):
+    """Client-caused ingestion problems (unsupported type, empty text) are 422s,
+    not 500s."""
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(status_code=422, content={"detail": str(exc)})
 
 app.add_middleware(
     CORSMiddleware,
