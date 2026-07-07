@@ -39,6 +39,8 @@ class QdrantStore:
         """Create keyword payload indexes (idempotent) so filtered search, count,
         and facet over tenant/collection/doc_id use the index instead of scanning.
         Qdrant builds these over any pre-existing points too."""
+        if settings.app_mode == "local":
+            return  # embedded Qdrant has no payload indexes (filters still work)
         for field in INDEXED_FIELDS:
             # Already indexed (or index is building) — safe to ignore.
             with contextlib.suppress(Exception):

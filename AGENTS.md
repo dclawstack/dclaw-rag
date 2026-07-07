@@ -13,10 +13,15 @@ questions and get cited, LLM-synthesized answers.
 - **Frontend:** Next.js (App Router), port `3003`
 - **Base API path:** `/api/v1/rag` (health probe is at `/health`)
 - **Vector store:** Qdrant · **Cache + collection metadata:** Redis
+- **Two run modes** (`APP_MODE`, `app/db/backend.py`): `server` (default — Redis,
+  external Qdrant, Celery) and `local` (zero external services — SQLite `LocalKV` shim,
+  embedded Qdrant, inline single-thread ingestion; see DEPLOY.md "Local mode").
 
-> ⚠️ This app does **NOT** use PostgreSQL, SQLAlchemy, Alembic, or a repository layer.
-> State lives in Qdrant (vectors) and Redis (collection records). Do not reintroduce a
-> relational-DB/ORM layer unless the architecture genuinely changes.
+> ⚠️ This app does **NOT** use SQLAlchemy, Alembic, an ORM, or a repository layer.
+> State lives in Qdrant (vectors) and a KV store — Redis in server mode, a SQLite-backed
+> Redis shim (`LocalKV`) in local mode. Stores must stick to the Redis subset `LocalKV`
+> implements (get/set/setnx/delete/exists/expire/incr*/s{add,rem,members,card}) or extend
+> the shim in the same change. Do not reintroduce a relational-DB/ORM layer.
 
 ## Architecture
 
@@ -27,8 +32,10 @@ questions and get cited, LLM-synthesized answers.
 - **Retrieval is hybrid:** dense (bge-large via sentence-transformers) **+** sparse/BM25
   (fastembed `Qdrant/bm25`), fused with **Reciprocal Rank Fusion**, then re-ranked with a
   cross-encoder. See `app/retrieval/`.
-- **Qdrant** uses **named vectors**: `dense` (1024-d cosine) + `sparse`. See
-  `app/db/qdrant_store.py`.
+- **Qdrant** uses **named vectors**: `dense` (dimension follows `embedding_model` —
+  1024 for bge-large, 384 for local-mode bge-small; fixed at collection creation) +
+  `sparse`. See `app/db/qdrant_store.py`. Always get the client via
+  `get_qdrant_client()` — the embedded local Qdrant locks its dir, one client per process.
 - **Collections** are lightweight metadata records persisted in **Redis**
   (`app/db/collection_store.py`); documents are associated via `metadata.collection_id`.
 - **Query caching** (`app/db/query_cache.py`): `/query` responses are cached per tenant in
@@ -40,9 +47,11 @@ questions and get cited, LLM-synthesized answers.
   processing → ready/failed). Qdrant holds the chunks; tenant/collection/doc payload
   indexes keep counts and filtered search off a full scan.
 - **Ingestion is async:** the route extracts text, registers a `pending` document, and
-  enqueues a **Celery** task (`app/ingestion/tasks.py`, `app/worker.py`) that does the heavy
-  chunk → embed → upsert off the request path and updates status. Idempotent by content
-  checksum. Run a worker: `celery -A app.worker.celery_app worker --queues ingestion`.
+  hands off via `dispatch_ingestion` (`app/ingestion/tasks.py`) — a **Celery** task in
+  server mode (`app/worker.py`; run a worker:
+  `celery -A app.worker.celery_app worker --queues ingestion`), a single background
+  thread in local mode. Same heavy chunk → embed → upsert path and status updates
+  either way. Idempotent by content checksum.
   Supported formats live in `app/ingestion/extractors/` + the `loaders` registry (PDF,
   DOCX, HTML, CSV/TSV, Markdown, plaintext).
 - **Generation** (`app/generation/`): `LLMGateway` (OpenAI / Anthropic) + Jinja prompt.
@@ -90,7 +99,7 @@ dclaw-rag/
 │   │   ├── dependencies.py       # Depends(...) providers
 │   │   └── routes/               # health, query, ingest, collections
 │   ├── core/                     # config (pydantic-settings), logging, exceptions
-│   ├── db/                       # qdrant_store, collection_store (Redis), cache
+│   ├── db/                       # backend (KV/Qdrant factories + LocalKV), qdrant_store, KV stores
 │   ├── generation/               # LLM gateway, prompts, output models
 │   ├── ingestion/                # pipeline, chunkers, extractors, loaders
 │   ├── models/schemas.py         # Pydantic v2 request/response models
@@ -142,7 +151,9 @@ secrets/CORS/LLM-provider keys are missing (`validate_runtime_config`).
   the `Depends(...)` providers (`tests/conftest.py`) — **no external services required**.
 - Every new router endpoint should have an integration test; new pure logic gets a unit test.
 - CI (`.github/workflows/ci.yml`) runs the blocking gates on every PR: **ruff**, **mypy**,
-  **pip-audit**, **pytest** (backend) and **eslint** + **next build** (frontend).
+  **pip-audit**, **pytest** (backend, 80% coverage gate), a **local-mode e2e** job
+  (real models, zero external services — `tests/integration/test_local_mode.py`,
+  gated by `LOCAL_MODE_E2E=1`), and **eslint** + **next build** (frontend).
   `claude-code-review.yml` runs an automated review on PRs.
 - **RAG quality eval** (`.github/workflows/eval.yml`, `scripts/evaluate.py`) runs nightly, on
   demand, and on retrieval-touching PRs: it ingests `eval/golden_set.json` into a throwaway
@@ -157,6 +168,7 @@ secrets/CORS/LLM-provider keys are missing (`validate_runtime_config`).
   (The Dockerfile and CI do this automatically.)
 - **Backend deps:** Qdrant (`:6333`) and Redis (`:6379`) — start them via
   `docker compose up qdrant redis` (or the full stack with `docker compose up`).
+  Or skip both with `APP_MODE=local` (state under `~/.dclaw-rag`; see DEPLOY.md).
 - **Config:** copy `.env.example` → `.env`; set `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` for
   generation. All settings map 1:1 to `app/core/config.py`.
 - **First run** creates the Qdrant collection with named `dense`+`sparse` vectors. If you
