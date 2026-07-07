@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   queryRag,
   agentQuery,
+  transcribeAudio,
   QueryResponse,
   AgentResponse,
   AgentStep,
@@ -20,7 +21,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Send, Quote, BookOpen, ChevronRight, Sparkles, ListTree } from "lucide-react";
+import { Send, Quote, BookOpen, ChevronRight, Sparkles, ListTree, Mic, Square } from "lucide-react";
 import { GroundingBadge } from "@/components/grounding-badge";
 
 export default function QueryPage() {
@@ -32,6 +33,43 @@ export default function QueryPage() {
   const [agentic, setAgentic] = useState(false);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [collectionId, setCollectionId] = useState("");
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+
+  async function toggleRecording() {
+    if (recording) {
+      recorderRef.current?.stop();
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setRecording(false);
+        setTranscribing(true);
+        try {
+          const { text } = await transcribeAudio(
+            new Blob(chunks, { type: recorder.mimeType || "audio/webm" })
+          );
+          if (text) setQuestion(text);
+          else toast.info("Didn't catch that — try again closer to the mic.");
+        } catch {
+          toast.error("Transcription failed");
+        } finally {
+          setTranscribing(false);
+        }
+      };
+      recorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+    } catch {
+      toast.error("Microphone unavailable or permission denied");
+    }
+  }
 
   useEffect(() => {
     listCollections()
@@ -102,6 +140,22 @@ export default function QueryPage() {
                   onChange={(e) => setQuestion(e.target.value)}
                   className="flex-1"
                 />
+                <Button
+                  type="button"
+                  variant={recording ? "destructive" : "outline"}
+                  onClick={toggleRecording}
+                  disabled={transcribing}
+                  title={recording ? "Stop recording" : "Ask by voice"}
+                  aria-label={recording ? "Stop recording" : "Ask by voice"}
+                >
+                  {transcribing ? (
+                    <Skeleton className="w-4 h-4 rounded-full" />
+                  ) : recording ? (
+                    <Square className="w-4 h-4" />
+                  ) : (
+                    <Mic className="w-4 h-4" />
+                  )}
+                </Button>
                 <Button type="submit" disabled={loading || !question.trim()}>
                   {loading ? (
                     <Skeleton className="w-4 h-4 rounded-full" />

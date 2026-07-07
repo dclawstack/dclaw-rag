@@ -177,6 +177,26 @@ export async function ingestFile(
   return res.json();
 }
 
+export async function transcribeAudio(
+  audio: Blob,
+  retried = false
+): Promise<{ text: string }> {
+  const formData = new FormData();
+  formData.append("file", audio, "clip.webm");
+
+  const res = await fetch(`${API_BASE}/api/v1/rag/transcribe`, {
+    method: "POST",
+    body: formData,
+    headers: authHeaders(),
+  });
+  if (res.status === 401 && !retried) {
+    if (await refreshAccessToken()) return transcribeAudio(audio, true);
+    redirectToLogin();
+  }
+  if (!res.ok) throw new Error(`Transcription error: ${res.status}`);
+  return res.json();
+}
+
 export async function ingestText(
   text: string,
   metadata?: Record<string, unknown>

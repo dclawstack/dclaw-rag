@@ -38,6 +38,7 @@ _STATE_DEPS = (
     "query_cache",
     "rate_limiter",
     "llm",
+    "transcriber",
 )
 
 
@@ -125,3 +126,40 @@ async def test_local_mode_ingest_query_roundtrip(local_mode, client):
 
     assert settings.sqlite_path.exists()
     assert settings.qdrant_path.exists()
+
+    # --- audio: ingest a spoken fact as a document (whisper transcription) ---
+    with open("tests/fixtures/aurora_fact.mp3", "rb") as fh:
+        resp = await client.post(
+            "/api/v1/rag/documents/upload",
+            files={"file": ("aurora_fact.mp3", fh.read(), "audio/mpeg")},
+            data={"metadata": '{"source": "e2e-audio", "title": "Aurora dam memo"}'},
+        )
+    assert resp.status_code == 200
+    doc = await _wait_until_processed(client, resp.json()["doc_id"])
+    assert doc["status"] == "ready", doc.get("error")
+
+    resp = await client.post(
+        "/api/v1/rag/query",
+        json={"question": "How much power does the Aurora dam generate?", "top_k": 3},
+    )
+    assert resp.status_code == 200
+    hits = resp.json()["retrieved_chunks"]
+    assert any("40 megawatts" in c["text"] for c in hits)
+
+    # --- audio: voice query via /transcribe feeding /query ---
+    with open("tests/fixtures/voice_query.mp3", "rb") as fh:
+        resp = await client.post(
+            "/api/v1/rag/transcribe",
+            files={"file": ("voice_query.mp3", fh.read(), "audio/mpeg")},
+        )
+    assert resp.status_code == 200
+    transcript = resp.json()["text"]
+    assert "bearing" in transcript.lower() and "turbine" in transcript.lower()
+
+    resp = await client.post(
+        "/api/v1/rag/query", json={"question": transcript, "top_k": 3, "verify": False}
+    )
+    assert resp.status_code == 200
+    voiced = resp.json()
+    assert voiced["abstained"] is False
+    assert voiced["citations"]

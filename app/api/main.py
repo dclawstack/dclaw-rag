@@ -19,9 +19,11 @@ from app.api.routes import (
     query,
     stats,
     system,
+    transcribe,
     usage,
 )
 from app.core.config import settings, validate_runtime_config
+from app.core.exceptions import IngestionError
 from app.core.logging import configure_logging
 from app.db.api_key_store import ApiKeyStore
 
@@ -58,6 +60,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+@app.exception_handler(IngestionError)
+async def ingestion_error_handler(request, exc: IngestionError):
+    """Client-caused ingestion problems (unsupported type, empty text) are 422s,
+    not 500s."""
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(status_code=422, content={"detail": str(exc)})
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_allow_origins,
@@ -76,6 +87,7 @@ app.include_router(usage.router, prefix="/api/v1/rag", tags=["System"])
 app.include_router(auth.router, prefix="/api/v1/rag", tags=["Auth"])
 app.include_router(keys.router, prefix="/api/v1/rag", tags=["Auth"])
 app.include_router(query.router, prefix="/api/v1/rag", tags=["Query"])
+app.include_router(transcribe.router, prefix="/api/v1/rag", tags=["Query"])
 app.include_router(agent.router, prefix="/api/v1/rag", tags=["Agent"])
 app.include_router(collections.router, prefix="/api/v1/rag", tags=["Collections"])
 app.include_router(ingest.router, prefix="/api/v1/rag/documents", tags=["Documents"])

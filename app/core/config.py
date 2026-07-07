@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     embedding_device: str = "cpu"
     embedding_batch_size: int = 32
 
+    # Speech-to-text (audio ingestion + voice queries), lazy-loaded on first
+    # use. Any faster-whisper size/id works (tiny/base/small/...).
+    whisper_model: str = "base"
+
     qdrant_url: str = "http://localhost:6333"
     qdrant_collection: str = "dclaw_docs"
     qdrant_api_key: str | None = None
