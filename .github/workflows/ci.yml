@@ -62,7 +62,7 @@ jobs:
           path: |
             ~/.cache/huggingface
             ~/.cache/fastembed
-          key: hf-models-local-mode-v1
+          key: hf-models-local-mode-v2  # v2: + whisper-base
       - name: Install uv
         run: pip install uv
       - name: Install CPU-only torch

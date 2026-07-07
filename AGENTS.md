@@ -52,9 +52,18 @@ questions and get cited, LLM-synthesized answers.
   `celery -A app.worker.celery_app worker --queues ingestion`), a single background
   thread in local mode. Same heavy chunk → embed → upsert path and status updates
   either way. Idempotent by content checksum.
-  Supported formats live in `app/ingestion/extractors/` + the `loaders` registry (PDF,
-  DOCX, HTML, CSV/TSV, Markdown, plaintext).
+  Supported formats live in `app/ingestion/extractors/` + the `loaders` registry: PDF,
+  DOCX, PPTX, XLSX, EPUB, EML, RTF, HTML, CSV/TSV, Markdown, audio
+  (mp3/wav/m4a/ogg/flac — transcribed by local whisper, `whisper_model` setting), and
+  **any plain-text file** (unknown extensions fall back to the plaintext extractor when
+  the content sniffs as NUL-free UTF-8; binaries are rejected). Note: text extraction —
+  including audio transcription — currently runs on the request path; only
+  chunk/embed/upsert is async.
 - **Generation** (`app/generation/`): `LLMGateway` (OpenAI / Anthropic) + Jinja prompt.
+- **Voice queries** (`app/api/routes/transcribe.py`, `app/ingestion/transcriber.py`):
+  `POST /transcribe` turns an uploaded audio clip into text via local faster-whisper
+  (lazy-loaded singleton, CPU int8); the query page's mic button records with
+  `MediaRecorder` and drops the transcript into the question box.
 - **Auth** (`app/core/security.py`, `app/db/user_store.py`, `app/db/refresh_token_store.py`,
   `app/api/routes/auth.py`): two credential types resolve to a tenant via `get_principal` —
   **end-user JWTs** (email+password signup/login, argon2 hashes in Redis; each signup gets its

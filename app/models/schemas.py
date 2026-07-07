@@ -42,6 +42,10 @@ class IngestResponse(BaseModel):
     status: str
 
 
+class TranscribeResponse(BaseModel):
+    text: str
+
+
 class TextIngestRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=2_000_000)
     metadata: dict[str, Any] = Field(default_factory=dict)

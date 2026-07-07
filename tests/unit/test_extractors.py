@@ -204,3 +204,19 @@ def test_rtf_extractor_strips_control_words(tmp_path):
     assert "Bold headline" in text
     assert "plain body" in text
     assert "\\rtf1" not in text
+
+
+def test_audio_extractor_uses_transcriber(tmp_path, monkeypatch):
+    from app.ingestion.extractors.audio import AudioExtractor
+
+    class _Stub:
+        def transcribe(self, file_path):
+            return "spoken words"
+
+    monkeypatch.setattr(
+        "app.ingestion.transcriber.get_transcriber", lambda: _Stub()
+    )
+    f = tmp_path / "memo.mp3"
+    f.write_bytes(b"\xff\xfb fake mp3")
+    assert AudioExtractor().extract(f) == "spoken words"
+    assert isinstance(get_extractor(f), AudioExtractor)

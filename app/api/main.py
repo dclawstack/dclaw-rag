@@ -19,6 +19,7 @@ from app.api.routes import (
     query,
     stats,
     system,
+    transcribe,
     usage,
 )
 from app.core.config import settings, validate_runtime_config
@@ -76,6 +77,7 @@ app.include_router(usage.router, prefix="/api/v1/rag", tags=["System"])
 app.include_router(auth.router, prefix="/api/v1/rag", tags=["Auth"])
 app.include_router(keys.router, prefix="/api/v1/rag", tags=["Auth"])
 app.include_router(query.router, prefix="/api/v1/rag", tags=["Query"])
+app.include_router(transcribe.router, prefix="/api/v1/rag", tags=["Query"])
 app.include_router(agent.router, prefix="/api/v1/rag", tags=["Agent"])
 app.include_router(collections.router, prefix="/api/v1/rag", tags=["Collections"])
 app.include_router(ingest.router, prefix="/api/v1/rag/documents", tags=["Documents"])

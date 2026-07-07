@@ -45,6 +45,11 @@ APP_MODE=local uvicorn app.api.main:app --port 8090
 cd frontend && npm run dev
 ```
 
+Voice and audio work fully offline too: the query page's mic button posts to
+`POST /transcribe`, and audio files (mp3/wav/m4a/ogg/flac) ingest as transcribed
+documents — both via a local faster-whisper model (`WHISPER_MODEL=base`,
+~150MB, lazy-loaded on first use so text-only users never pay for it).
+
 `DATA_DIR` moves the state root. For answers you still need an LLM:
 `LLM_PROVIDER=openrouter` + `OPENROUTER_API_KEY` (bring-your-own-key), or
 `LLM_PROVIDER=ollama` for a fully local stack. `/health/ready` reports

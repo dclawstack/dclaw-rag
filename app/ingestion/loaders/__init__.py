@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from app.core.exceptions import IngestionError
+from app.ingestion.extractors.audio import AudioExtractor
 from app.ingestion.extractors.base import Extractor
 from app.ingestion.extractors.csv import CSVExtractor
 from app.ingestion.extractors.docx import DocxExtractor
@@ -25,6 +26,7 @@ _EXTRACTORS: list[type[Extractor]] = [
     EpubExtractor,
     EmailExtractor,
     RTFExtractor,
+    AudioExtractor,
     PlainTextExtractor,
 ]
 
