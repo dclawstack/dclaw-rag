@@ -2,11 +2,11 @@ import contextlib
 from typing import Any
 from uuid import UUID
 
-from qdrant_client import QdrantClient
 from qdrant_client.http import models as rest
 
 from app.core.config import settings
 from app.core.exceptions import RetrievalError
+from app.db.backend import get_qdrant_client
 from app.models.schemas import ChunkMetadata, DocumentChunk
 
 # Payload fields we filter by; indexing them keeps tenant/collection/doc queries
@@ -16,10 +16,8 @@ INDEXED_FIELDS = ("tenant_id", "collection_id", "doc_id")
 
 class QdrantStore:
     def __init__(self) -> None:
-        self.client = QdrantClient(
-            url=settings.qdrant_url,
-            api_key=settings.qdrant_api_key or None,
-        )
+        # Shared per-process client (embedded local Qdrant allows only one).
+        self.client = get_qdrant_client()
         self.collection = settings.qdrant_collection
         self._ensure_collection()
         self._ensure_indexes()
@@ -30,7 +28,7 @@ class QdrantStore:
                 collection_name=self.collection,
                 vectors_config={
                     "dense": rest.VectorParams(
-                        size=1024,
+                        size=settings.embedding_dim,
                         distance=rest.Distance.COSINE,
                     )
                 },

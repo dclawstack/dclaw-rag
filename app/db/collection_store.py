@@ -1,8 +1,6 @@
 import json
 
-import redis
-
-from app.core.config import settings
+from app.db.backend import make_kv
 
 
 class CollectionStore:
@@ -15,7 +13,7 @@ class CollectionStore:
     INDEX_KEY = "collections:index"
 
     def __init__(self) -> None:
-        self._redis = redis.from_url(settings.redis_url, decode_responses=True)
+        self._redis = make_kv()
 
     def _key(self, collection_id: str) -> str:
         return f"collection:{collection_id}"

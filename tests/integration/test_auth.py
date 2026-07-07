@@ -143,7 +143,7 @@ async def test_client_supplied_tenant_id_is_ignored(client, monkeypatch):
     docs = _CapturingDocStore()
     enqueued = []
     monkeypatch.setattr(
-        ingest_module.ingest_document_task, "delay", lambda *a, **k: enqueued.append(a)
+        ingest_module, "dispatch_ingestion", lambda *a, **k: enqueued.append(a)
     )
     app.dependency_overrides[get_document_store] = lambda: docs
     app.dependency_overrides[get_principal] = lambda: Principal(tenant_id="real-tenant")

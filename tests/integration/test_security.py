@@ -34,7 +34,7 @@ class _DocStore:
 def _spy_enqueue(monkeypatch):
     calls = []
     monkeypatch.setattr(
-        ingest_module.ingest_document_task, "delay", lambda *a, **k: calls.append(a)
+        ingest_module, "dispatch_ingestion", lambda *a, **k: calls.append(a)
     )
     return calls
 

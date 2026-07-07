@@ -1,9 +1,26 @@
+from pathlib import Path
+
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Dense vector size per embedding model — the Qdrant collection dimension is
+# fixed at creation, so this must match the configured model.
+_EMBEDDING_DIMS = {
+    "BAAI/bge-large-en-v1.5": 1024,
+    "BAAI/bge-base-en-v1.5": 768,
+    "BAAI/bge-small-en-v1.5": 384,
+}
 
 
 class Settings(BaseSettings):
     app_env: str = "dev"
     log_level: str = "INFO"
+
+    # server: Redis + external Qdrant + Celery (the default, for deployments).
+    # local: zero external services — SQLite KV, embedded Qdrant, inline
+    # ingestion — for running as a single desktop process.
+    app_mode: str = "server"  # server | local
+    data_dir: str = "~/.dclaw-rag"  # local-mode state root (SQLite + Qdrant files)
 
     api_host: str = "0.0.0.0"
     api_port: int = 8090
@@ -77,6 +94,30 @@ class Settings(BaseSettings):
     max_request_bytes: int = 12 * 1024 * 1024  # global request body cap
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    @model_validator(mode="after")
+    def _apply_local_profile(self) -> "Settings":
+        """Local-mode defaults; anything set explicitly (env/.env) wins."""
+        if self.app_mode == "local":
+            if "rate_limit_per_minute" not in self.model_fields_set:
+                self.rate_limit_per_minute = 0  # single user, no abuse surface
+            if "embedding_model" not in self.model_fields_set:
+                self.embedding_model = "BAAI/bge-small-en-v1.5"
+            if "bootstrap_api_key" not in self.model_fields_set:
+                self.bootstrap_api_key = "sk_local"  # the local frontend's NEXT_PUBLIC_API_KEY
+        return self
+
+    @property
+    def embedding_dim(self) -> int:
+        return _EMBEDDING_DIMS.get(self.embedding_model, 1024)
+
+    @property
+    def sqlite_path(self) -> Path:
+        return Path(self.data_dir).expanduser() / "kv.sqlite3"
+
+    @property
+    def qdrant_path(self) -> Path:
+        return Path(self.data_dir).expanduser() / "qdrant"
 
 
 settings = Settings()

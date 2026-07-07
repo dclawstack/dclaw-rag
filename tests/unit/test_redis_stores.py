@@ -1,7 +1,10 @@
-"""Unit tests for the Redis-backed stores, driven by a fake Redis so they run
-without a real server (and exercise the store logic the integration tests skip
-by using fakes)."""
+"""Unit tests for the KV-backed stores, parametrized over both backends: a fake
+Redis (no server needed) and the SQLite LocalKV used in local mode. The same
+assertions passing against both proves the shim's Redis semantics."""
 
+import pytest
+
+from app.db.backend import LocalKV
 from app.db.collection_store import CollectionStore
 from app.db.document_store import DocumentStore
 from app.db.user_store import UserStore
@@ -41,17 +44,24 @@ class FakeRedis:
         return len(self.sets.get(key, set()))
 
 
-def _make(cls):
-    store = cls.__new__(cls)
-    store._redis = FakeRedis()
-    return store
+@pytest.fixture(params=["fakeredis", "localkv"])
+def make_store(request, tmp_path):
+    def _make(cls):
+        store = cls.__new__(cls)
+        if request.param == "fakeredis":
+            store._redis = FakeRedis()
+        else:
+            store._redis = LocalKV(str(tmp_path / "kv.sqlite3"))
+        return store
+
+    return _make
 
 
 # --- CollectionStore ---
 
 
-def test_collection_store_tenant_scoping():
-    s = _make(CollectionStore)
+def test_collection_store_tenant_scoping(make_store):
+    s = make_store(CollectionStore)
     s.create("c1", {"id": "c1", "tenant_id": "A", "created_at": "1"})
     s.create("c2", {"id": "c2", "tenant_id": "B", "created_at": "2"})
 
@@ -61,8 +71,8 @@ def test_collection_store_tenant_scoping():
     assert s.list("B")[0]["id"] == "c2"
 
 
-def test_collection_store_delete_is_tenant_scoped():
-    s = _make(CollectionStore)
+def test_collection_store_delete_is_tenant_scoped(make_store):
+    s = make_store(CollectionStore)
     s.create("c1", {"id": "c1", "tenant_id": "A", "created_at": "1"})
     assert s.delete("c1", "B") is False  # other tenant can't delete
     assert s.delete("c1", "A") is True
@@ -84,8 +94,8 @@ def _doc(doc_id, tenant, collection=None, checksum=None, created="1"):
     }
 
 
-def test_document_store_counts_and_tenant_scope():
-    s = _make(DocumentStore)
+def test_document_store_counts_and_tenant_scope(make_store):
+    s = make_store(DocumentStore)
     s.create(_doc("d1", "A", collection="c1"))
     s.create(_doc("d2", "A", collection="c1"))
     s.create(_doc("d3", "B"))
@@ -97,8 +107,8 @@ def test_document_store_counts_and_tenant_scope():
     assert s.get("d1", "B") is None  # wrong tenant
 
 
-def test_document_store_status_and_checksum():
-    s = _make(DocumentStore)
+def test_document_store_status_and_checksum(make_store):
+    s = make_store(DocumentStore)
     s.create(_doc("d1", "A", checksum="abc"))
 
     assert s.find_by_checksum("A", "abc")["id"] == "d1"
@@ -109,8 +119,8 @@ def test_document_store_status_and_checksum():
     assert rec["status"] == "ready" and rec["chunk_count"] == 7
 
 
-def test_document_store_list_pagination_newest_first():
-    s = _make(DocumentStore)
+def test_document_store_list_pagination_newest_first(make_store):
+    s = make_store(DocumentStore)
     for i in range(5):
         s.create(_doc(f"d{i}", "A", created=str(i)))
     page = s.list("A", limit=2, offset=0)
@@ -121,8 +131,8 @@ def test_document_store_list_pagination_newest_first():
 # --- UserStore ---
 
 
-def test_user_store_create_and_lookup():
-    s = _make(UserStore)
+def test_user_store_create_and_lookup(make_store):
+    s = make_store(UserStore)
     rec = {"id": "u1", "email": "A@B.com", "tenant_id": "t1"}
     s.create(rec)
 
@@ -131,8 +141,8 @@ def test_user_store_create_and_lookup():
     assert s.get_by_email("missing@x.com") is None
 
 
-def test_user_store_rejects_duplicate_email():
-    s = _make(UserStore)
+def test_user_store_rejects_duplicate_email(make_store):
+    s = make_store(UserStore)
     s.create({"id": "u1", "email": "dup@x.com", "tenant_id": "t1"})
     try:
         s.create({"id": "u2", "email": "dup@x.com", "tenant_id": "t2"})
