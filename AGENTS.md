@@ -88,6 +88,19 @@ questions and get cited, LLM-synthesized answers.
   best-effort — it never fails a request.
 - **Logging:** `structlog` (`app/core/logging.py`) — no `print()`, and never log key values.
 
+### Desktop shell (`desktop/`)
+- **Electron** app running the whole product locally: spawns the backend in
+  `APP_MODE=local`, forks the Next standalone UI server (port 3003), health-gates the
+  window. Dev: `npm run build:ui && npm start` (see `desktop/README.md` — including the
+  Ubuntu chrome-sandbox SUID step). Packaged: `npm run dist` → AppImage/deb; first launch
+  bootstraps a private Python runtime under `~/.dclaw-rag/runtime` via bundled `uv`.
+- LLM choice for packaged installs lives in `~/.dclaw-rag/desktop.env` (first-run chooser
+  writes it); dev mode uses the repo `.env`.
+- `npm run self-test` is the e2e: ingest → voice-record (stubbed mic) → transcribe →
+  cited answer, asserted from live DOM. It needs a display + models + an LLM, so it is a
+  dev-machine tool, not a CI job. `desktop/README.md` lists hard-won Electron gotchas —
+  read it before touching `main.js`.
+
 ### Frontend (`frontend/`)
 - **Next.js 14+ App Router**, **Tailwind**, pre-built UI components in
   `src/components/ui/` (use them; the project uses `@base-ui/react` primitives).
