@@ -64,10 +64,19 @@ _local_pipeline = None
 
 def _run_local(doc_id: str, text: str, request_dict: dict) -> None:
     global _local_pipeline
-    if _local_pipeline is None:
-        from app.ingestion.pipeline import IngestionPipeline
+    try:
+        if _local_pipeline is None:
+            from app.ingestion.pipeline import IngestionPipeline
 
-        _local_pipeline = IngestionPipeline()
+            _local_pipeline = IngestionPipeline()
+    except Exception as exc:
+        # Without this the document would sit in "pending" forever.
+        logger.error("local_pipeline_init_failed", doc_id=doc_id, error=str(exc))
+        from app.db.document_store import DocumentStore
+
+        with contextlib.suppress(Exception):
+            DocumentStore().set_status(doc_id, "failed", error=f"pipeline init: {exc}")
+        return
     # _process has already recorded a failed status + logged on error.
     with contextlib.suppress(Exception):
         _process_and_invalidate(doc_id, text, request_dict, _local_pipeline)
