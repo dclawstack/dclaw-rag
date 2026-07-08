@@ -28,6 +28,7 @@ const SELF_TEST = process.argv.includes("--self-test");
 // fake-capture-from-file flags are unreliable across versions.
 
 const backend = require("./backend");
+const settings = require("./settings");
 
 const repoRoot = backend.repoRootOrNull() || path.resolve(__dirname, "..");
 const children = [];
@@ -56,6 +57,9 @@ function startBackend() {
       cwd,
       env: {
         ...process.env,
+        // Stored LLM choice — packaged mode only (dev uses the repo .env);
+        // explicitly exported env vars always win.
+        ...(backend.repoRootOrNull() ? {} : settings.desktopEnvDefaults(process.env)),
         APP_MODE: "local",
         BOOTSTRAP_API_KEY: "sk_local",
         PYTHONUNBUFFERED: "1", // piped stdout is block-buffered; logs must stream
@@ -367,6 +371,17 @@ async function main() {
          document.getElementById("detail").textContent = ${JSON.stringify(detail)};`
       )
       .catch(() => {});
+
+  // Packaged first run with no LLM configured anywhere: ask once.
+  if (
+    !SELF_TEST &&
+    !backend.repoRootOrNull() &&
+    !settings.readDesktopEnv() &&
+    !process.env.OPENROUTER_API_KEY &&
+    !process.env.LLM_PROVIDER
+  ) {
+    await settings.firstRunSettings();
+  }
 
   // Packaged first run: install the private Python runtime (one-off, ~2GB —
   // the same first-run network the ML models need anyway).

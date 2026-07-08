@@ -21,7 +21,8 @@
     "productName": "DClaw RAG",
     "files": [
       "main.js",
-      "backend.js"
+      "backend.js",
+      "settings.js"
     ],
     "extraResources": [
       {

@@ -62,9 +62,35 @@ Hard-won notes baked into `main.js` (don't undo silently):
 - **SIGTERM/SIGINT handlers kill the backend/UI children** — plain
   `process.on("exit")` does not run on signals.
 
+## Packaged builds
+
+```bash
+npm run dist   # → dist/DClaw RAG-<v>.AppImage (~170MB) + dist/*.deb (~135MB)
+```
+
+The installer stays small because the Python side isn't frozen: the app ships
+a `uv` binary plus the backend wheel, and the **first launch bootstraps a
+private runtime** under `~/.dclaw-rag/runtime` (standalone CPython, CPU-only
+torch, the app). First run therefore needs the network — no new requirement,
+since the ML models download from Hugging Face on first use anyway. A rebuilt
+wheel (sha256 marker) re-runs the bootstrap. PyInstaller was rejected: its only
+advantage (offline install) is unattainable here, and it costs 2.5GB installers
+plus ML-stack fragility.
+
+The UI ships as `ui.tar` and is extracted at bootstrap — electron-builder
+strips `node_modules`/dot-dirs from `extraResources`, so a plain directory
+arrives gutted.
+
+**LLM settings:** first packaged launch with no LLM configured shows a chooser
+(OpenRouter key, or Ollama model). The choice lives in `~/.dclaw-rag/desktop.env`
+(plain KEY=VALUE, editable — e.g. `LLM_PROVIDER=ollama` +
+`OLLAMA_MODEL=llama3.2:3b`) and is merged into the backend env on launch;
+explicitly exported env vars win. Dev mode ignores it (the repo `.env` rules).
+
+Packaged self-test: `./dist/*.AppImage --appimage-extract-and-run --self-test`
+(uses a throwaway data dir; honors env overrides like `OLLAMA_MODEL=...`).
+
 ## Not done yet (tracker: `dclaw-rag-desktop`)
 
-- M2: packaged builds (PyInstaller vs bundled-venv spike, electron-builder
-  AppImage/deb)
-- M3: in-app LLM settings (OpenRouter key / Ollama) passed to the backend
-- macOS/Windows targets, signing, auto-update
+- macOS/Windows targets, signing, auto-update, app icon
+- re-opening the settings window from inside the app (edit the file for now)
