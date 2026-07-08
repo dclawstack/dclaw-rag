@@ -2,6 +2,15 @@ from app.core.config import settings
 from app.models.schemas import DocumentChunk
 
 
+def embedding_text(chunk: DocumentChunk) -> str:
+    """The text actually embedded for a chunk: its situating context (if any,
+    from contextual retrieval) prepended to the chunk body. The stored/displayed
+    text remains chunk.text."""
+    if chunk.context:
+        return f"{chunk.context}\n\n{chunk.text}"
+    return chunk.text
+
+
 class Embedder:
     def __init__(self) -> None:
         # Lazy import to avoid loading at import time
@@ -26,7 +35,7 @@ class Embedder:
         return self.embed([text])[0]
 
     def embed_chunks(self, chunks: list[DocumentChunk]) -> list[DocumentChunk]:
-        texts = [c.text for c in chunks]
+        texts = [embedding_text(c) for c in chunks]
         embeddings = self.embed(texts)
         for chunk, emb in zip(chunks, embeddings, strict=True):
             chunk.embedding = emb
@@ -47,7 +56,7 @@ class SparseEmbedder:
         return {"indices": emb.indices.tolist(), "values": emb.values.tolist()}
 
     def embed_chunks(self, chunks: list[DocumentChunk]) -> list[DocumentChunk]:
-        texts = [c.text for c in chunks]
+        texts = [embedding_text(c) for c in chunks]
         for chunk, emb in zip(chunks, self.model.embed(texts), strict=True):
             chunk.sparse_embedding = {
                 "indices": emb.indices.tolist(),

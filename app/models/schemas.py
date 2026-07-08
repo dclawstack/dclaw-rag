@@ -21,6 +21,10 @@ class ChunkMetadata(BaseModel):
 class DocumentChunk(BaseModel):
     id: UUID
     text: str
+    # Transient situating context (e.g. the document title/section) prepended to
+    # `text` ONLY when embedding — contextual retrieval. Not persisted to Qdrant;
+    # the stored/displayed text stays `text`. See app/ingestion/chunkers.
+    context: str | None = None
     embedding: list[float] | None = None
     sparse_embedding: dict[str, Any] | None = None
     score: float | None = None

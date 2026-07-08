@@ -32,6 +32,15 @@ questions and get cited, LLM-synthesized answers.
 - **Retrieval is hybrid:** dense (bge-large via sentence-transformers) **+** sparse/BM25
   (fastembed `Qdrant/bm25`), fused with **Reciprocal Rank Fusion**, then re-ranked with a
   cross-encoder. See `app/retrieval/`.
+- **Contextual retrieval** (`CONTEXTUAL_RETRIEVAL`, on by default): at ingestion each
+  chunk is embedded with its document context prepended (`embedding_text()` in
+  `app/retrieval/embedder.py`; context built in `chunkers/hierarchical.py`) — the
+  **stored** payload text stays raw, only the embedding is situated. Affects newly
+  ingested docs only.
+- **Self-correcting retrieval** (`app/retrieval/self_correct.py`, `SELF_CORRECT_RETRIEVAL`):
+  the `/query` route runs `search_self_correcting`, which reformulates the query once with
+  the LLM and re-searches when the top rerank score is below `self_correct_threshold`,
+  keeping the retry only if it's stronger. One extra LLM call at most, on weak queries.
 - **Qdrant** uses **named vectors**: `dense` (dimension follows `embedding_model` —
   1024 for bge-large, 384 for local-mode bge-small; fixed at collection creation) +
   `sparse`. See `app/db/qdrant_store.py`. Always get the client via
@@ -213,4 +222,8 @@ secrets/CORS/LLM-provider keys are missing (`validate_runtime_config`).
   when the cloud provider errors (`FallbackGateway`; toggle via `LLM_FALLBACK_TO_OLLAMA`).
 - A `celery`/`app.tasks` worker is referenced in `infra/docker-compose.yml` but the task
   module does not exist yet.
-- Agentic (multi-step) RAG is not implemented (PRD P0.4).
+- Agentic (multi-step) RAG (`app/generation/agent.py`, `POST /agent`): decompose the
+  question, then **iterate** retrieve → reflect → re-search until covered or the
+  `max_steps` search budget is spent, synthesize, and fact-check (`verify_answer`) —
+  downgrading confidence to `low` when unsupported. Reflection is gated by
+  `AGENTIC_REFLECTION`. Abstain-aware (returns low confidence with no evidence).

@@ -73,6 +73,21 @@ class Settings(BaseSettings):
     reranker_model: str = "BAAI/bge-reranker-base"
     reranker_top_k: int = 10
 
+    # Retrieval quality (E2).
+    # Contextual retrieval: prepend document context (title/source) to each chunk
+    # before embedding so its vector captures where it sits in the document —
+    # a recall win, no LLM. Affects newly-ingested docs only; stored text is
+    # unchanged, so it's safe to toggle and mix with existing chunks.
+    contextual_retrieval: bool = True
+    # Self-correcting retrieval: when the top reranked score is weak, reformulate
+    # the query once with the LLM and re-retrieve before answering/abstaining.
+    self_correct_retrieval: bool = True
+    self_correct_threshold: float = 0.5  # reformulate below this rerank score
+    # Agentic RAG: after the initial decomposition, reflect on the gathered
+    # evidence and issue follow-up searches until the question is covered or the
+    # step budget (AgentRequest.max_steps) is spent.
+    agentic_reflection: bool = True
+
     # LLM pricing for usage/cost metering (USD per 1K tokens). Defaults are
     # Sonnet-tier; set these to match your configured model/provider.
     llm_price_per_1k_input_usd: float = 0.003

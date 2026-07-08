@@ -52,7 +52,13 @@ class _ExplodingLLM:
         raise AssertionError("LLM must not be called when abstaining")
 
 
-async def test_abstains_when_top_score_below_threshold(client):
+async def test_abstains_when_top_score_below_threshold(client, monkeypatch):
+    # Isolate the pure abstention path: self-correcting retrieval (tested
+    # separately) would otherwise make one reformulation call on weak results
+    # "before abstaining immediately".
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "self_correct_retrieval", False)
     llm = _ExplodingLLM()
     app.dependency_overrides[get_searcher] = lambda: _Searcher([_chunk(-1.0)])
     app.dependency_overrides[get_llm] = lambda: llm
@@ -66,6 +72,31 @@ async def test_abstains_when_top_score_below_threshold(client):
     assert body["citations"] == []
     assert "enough" in body["answer"].lower()
     assert llm.called is False  # no generation on abstention
+
+
+async def test_self_correcting_retrieval_rescues_weak_query(client):
+    # First phrasing retrieves weak chunks; the LLM-reformulated query hits
+    # strong chunks, so the route answers instead of abstaining.
+    class _QueryAwareSearcher:
+        def search(self, query, top_k=10, filters=None):
+            return [_chunk(0.9)] if "revenue" in query else [_chunk(0.05)]
+
+    # call 1: reformulation → call 2: generation → call 3: verification
+    llm = _ScriptedLLM(
+        [
+            "q3 revenue figure",
+            ANSWER,
+            '{"faithfulness": "grounded", "unsupported_claims": []}',
+        ]
+    )
+    app.dependency_overrides[get_searcher] = lambda: _QueryAwareSearcher()
+    app.dependency_overrides[get_llm] = lambda: llm
+
+    resp = await client.post(QUERY_PATH, json={"question": "how did we do?", "top_k": 5})
+
+    body = resp.json()
+    assert body["abstained"] is False
+    assert "5M" in body["answer"]
 
 
 async def test_grounded_answer_is_verified(client):
