@@ -2,3 +2,4 @@ node_modules/
 self-test.png
 self-test-*.png
 dist/
+bundle/

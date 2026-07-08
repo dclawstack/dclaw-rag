@@ -23,7 +23,7 @@ from app.api.routes import (
     usage,
 )
 from app.core.config import settings, validate_runtime_config
-from app.core.exceptions import IngestionError
+from app.core.exceptions import GenerationError, IngestionError, RetrievalError
 from app.core.logging import configure_logging
 from app.db.api_key_store import ApiKeyStore
 
@@ -68,6 +68,18 @@ async def ingestion_error_handler(request, exc: IngestionError):
     from fastapi.responses import JSONResponse
 
     return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+@app.exception_handler(GenerationError)
+@app.exception_handler(RetrievalError)
+async def upstream_error_handler(request, exc: Exception):
+    """LLM/vector-store failures are upstream problems: return a real 502 with
+    the reason (an unhandled exception would also lose its CORS headers, which
+    browsers report as an opaque CORS error instead of the actual cause)."""
+    logger.error("upstream_dependency_failed", error=str(exc))
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(status_code=502, content={"detail": str(exc)})
 
 app.add_middleware(
     CORSMiddleware,
