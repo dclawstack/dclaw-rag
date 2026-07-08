@@ -151,7 +151,18 @@ def _build_gateway(provider: str) -> LLMGateway:
 
 def get_llm_gateway() -> LLMGateway:
     provider = settings.llm_provider.lower()
-    primary = _build_gateway(provider)
+    try:
+        primary = _build_gateway(provider)
+    except Exception as exc:
+        # A missing key can fail at client CONSTRUCTION (e.g. openai raises
+        # before any completion is attempted) — honor the Ollama fallback
+        # instead of turning every query into a 500.
+        if provider != "ollama" and settings.llm_fallback_to_ollama:
+            logger.warning(
+                "llm_primary_unavailable_using_fallback", provider=provider, error=str(exc)
+            )
+            return OllamaGateway()
+        raise
     if provider != "ollama" and settings.llm_fallback_to_ollama:
         return FallbackGateway(primary, OllamaGateway())
     return primary

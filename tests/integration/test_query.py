@@ -82,3 +82,32 @@ async def test_query_with_no_results_is_low_confidence(client):
     assert body["confidence"] == "low"
     assert body["retrieved_chunks"] == []
     assert body["citations"] == []
+
+
+async def test_generation_error_returns_502(client, monkeypatch):
+    from uuid import uuid4
+
+    from app.api.dependencies import get_llm, get_searcher
+    from app.api.main import app
+    from app.core.exceptions import GenerationError
+    from app.models.schemas import ChunkMetadata, DocumentChunk
+
+    class _FailingLLM:
+        async def complete(self, messages, temperature=0.2):
+            raise GenerationError("Ollama completion failed: connect refused")
+
+    class _OneHitSearcher:
+        def search(self, query, top_k=10, filters=None):
+            chunk = DocumentChunk(
+                id=uuid4(), text="relevant text", embedding=None,
+                metadata=ChunkMetadata(doc_id=uuid4(), chunk_index=0, source="t"),
+            )
+            chunk.score = 0.9
+            return [chunk]
+
+    app.dependency_overrides[get_llm] = lambda: _FailingLLM()
+    app.dependency_overrides[get_searcher] = lambda: _OneHitSearcher()
+
+    resp = await client.post("/api/v1/rag/query", json={"question": "anything?"})
+    assert resp.status_code == 502
+    assert "Ollama" in resp.json()["detail"]

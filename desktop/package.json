@@ -4,12 +4,45 @@
   "description": "DClaw RAG desktop shell (Electron): local-mode backend + Next.js UI in one window",
   "main": "main.js",
   "private": true,
+  "homepage": "https://dclaw-rag.vercel.app",
   "scripts": {
     "build:ui": "cd ../frontend && NEXT_PUBLIC_API_URL=http://127.0.0.1:8090 NEXT_PUBLIC_API_KEY=sk_local npm run build && rm -rf .next/standalone/.next/static .next/standalone/public && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public",
+    "build:bundle": "bash scripts/build-bundle.sh",
+    "dist": "npm run build:ui && npm run build:bundle && electron-builder --linux",
     "start": "electron .",
     "self-test": "electron . --self-test"
   },
   "devDependencies": {
-    "electron": "^43.0.0"
+    "electron": "^43.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "ai.dclaw.rag",
+    "productName": "DClaw RAG",
+    "files": [
+      "main.js",
+      "backend.js"
+    ],
+    "extraResources": [
+      {
+        "from": "bundle/backend",
+        "to": "backend"
+      },
+      {
+        "from": "bundle/ui.tar",
+        "to": "ui.tar"
+      }
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Office",
+      "maintainer": "dclawstack"
+    }
   }
 }

@@ -27,7 +27,9 @@ const SELF_TEST = process.argv.includes("--self-test");
 // decoded from the committed voice fixture (see selfTest) — Chromium's
 // fake-capture-from-file flags are unreliable across versions.
 
-const repoRoot = path.resolve(__dirname, "..");
+const backend = require("./backend");
+
+const repoRoot = backend.repoRootOrNull() || path.resolve(__dirname, "..");
 const children = [];
 let backendLog = "";
 
@@ -35,32 +37,28 @@ function log(...args) {
   console.log("[shell]", ...args);
 }
 
-function pythonBin() {
-  if (process.env.DCLAW_PYTHON) return process.env.DCLAW_PYTHON;
-  const venv = path.join(repoRoot, ".venv", "bin", "python");
-  return fs.existsSync(venv) ? venv : "python3";
-}
-
 function track(child, name) {
   children.push(child);
-  child.stdout?.on("data", (d) => {
+  const capture = (d) => {
     if (name === "backend") backendLog = (backendLog + d).slice(-8000);
-  });
-  child.stderr?.on("data", (d) => {
-    if (name === "backend") backendLog = (backendLog + d).slice(-8000);
-  });
+    else log(`${name}: ${String(d).trim().slice(0, 300)}`);
+  };
+  child.stdout?.on("data", capture);
+  child.stderr?.on("data", capture);
   child.on("exit", (code) => log(`${name} exited (${code})`));
   return child;
 }
 
 function startBackend() {
+  const { python, cwd } = backend.backendLaunch(process.resourcesPath);
   return track(
-    spawn(pythonBin(), ["-m", "uvicorn", "app.api.main:app", "--port", String(BACKEND_PORT)], {
-      cwd: repoRoot,
+    spawn(python, ["-m", "uvicorn", "app.api.main:app", "--port", String(BACKEND_PORT)], {
+      cwd,
       env: {
         ...process.env,
         APP_MODE: "local",
         BOOTSTRAP_API_KEY: "sk_local",
+        PYTHONUNBUFFERED: "1", // piped stdout is block-buffered; logs must stream
         // Cached models must not stall on Hugging Face hub checks (anonymous
         // rate limits back off for minutes): fail the check fast and fall
         // back to the local cache; downloads still work when a model is new.
@@ -83,7 +81,11 @@ function startBackend() {
 }
 
 function startUi() {
-  const standalone = path.join(repoRoot, "frontend", ".next", "standalone", "server.js");
+  const packagedUi = backend.packagedUiServer();
+  const standalone =
+    !backend.repoRootOrNull() && fs.existsSync(packagedUi)
+      ? packagedUi
+      : path.join(repoRoot, "frontend", ".next", "standalone", "server.js");
   if (!fs.existsSync(standalone)) {
     throw new Error(
       "UI build missing. Run `npm run build:ui` in desktop/ first (builds the frontend for the shell)."
@@ -168,9 +170,14 @@ function backendRequest(method, apiPath, body) {
   });
 }
 
+// Packaged app code lives in a read-only asar — write artifacts to tmp there.
+const artifactsDir = backend.repoRootOrNull()
+  ? __dirname
+  : fs.mkdtempSync(path.join(require("node:os").tmpdir(), "dclaw-selftest-artifacts-"));
+
 async function shot(win, name) {
   const image = await win.webContents.capturePage();
-  const out = path.join(__dirname, `self-test-${name}.png`);
+  const out = path.join(artifactsDir, `self-test-${name}.png`);
   fs.writeFileSync(out, image.toPNG());
   log(`screenshot: ${out}`);
   return image;
@@ -220,8 +227,10 @@ async function selfTest(win) {
   // Make the mic "speak" the committed fixture: getUserMedia returns a stream
   // playing the decoded clip, so record -> /transcribe -> question box runs
   // exactly as it would for a real user.
-  const clipB64 = fs.readFileSync(path.join(repoRoot, "tests", "fixtures", "voice_query.mp3"))
-    .toString("base64");
+  const fixture = backend.repoRootOrNull()
+    ? path.join(repoRoot, "tests", "fixtures", "voice_query.mp3")
+    : path.join(process.resourcesPath, "backend", "voice_query.mp3");
+  const clipB64 = fs.readFileSync(fixture).toString("base64");
   await win.webContents.executeJavaScript(
     `(async () => {
       const bytes = Uint8Array.from(atob("${clipB64}"), (c) => c.charCodeAt(0));
@@ -282,7 +291,7 @@ async function selfTest(win) {
       true
     );
     if (b64) {
-      const clipPath = path.join(__dirname, "self-test-clip.webm");
+      const clipPath = path.join(artifactsDir, "self-test-clip.webm");
       fs.writeFileSync(clipPath, Buffer.from(b64, "base64"));
       log(`recorded clip saved: ${clipPath}`);
     }
@@ -304,7 +313,7 @@ async function selfTest(win) {
     await waitInPage(
       win,
       `(() => {
-        const m = (document.body.innerText.match(/[^\\n]*magnetic bearing[^\\n]*/i) || [""])[0];
+        const m = (document.body.innerText.match(/[^\\n]*magnetic[^\\n]*/i) || [""])[0];
         if (!m) return "";
         const mic = document.querySelector('button[aria-label="Ask by voice"], button[aria-label="Stop recording"]');
         return JSON.stringify({
@@ -347,10 +356,32 @@ async function main() {
     "data:text/html," +
       encodeURIComponent(
         `<body style="font-family:sans-serif;background:#111;color:#eee;display:grid;place-items:center;height:95vh;margin:0">
-           <div style="text-align:center"><h3>DClaw RAG</h3><p>Starting local engine…</p></div></body>`
+           <div style="text-align:center"><h3>DClaw RAG</h3><p id="msg">Starting local engine…</p>
+           <p id="detail" style="font-size:11px;color:#888;max-width:380px;overflow:hidden;white-space:nowrap"></p></div></body>`
       )
   );
+  const splash = (msg, detail = "") =>
+    loading.webContents
+      .executeJavaScript(
+        `document.getElementById("msg").textContent = ${JSON.stringify(msg)};
+         document.getElementById("detail").textContent = ${JSON.stringify(detail)};`
+      )
+      .catch(() => {});
 
+  // Packaged first run: install the private Python runtime (one-off, ~2GB —
+  // the same first-run network the ML models need anyway).
+  if (!backend.repoRootOrNull() && !process.env.DCLAW_PYTHON) {
+    if (!backend.runtimeReady(process.resourcesPath)) {
+      log("bootstrapping backend runtime (first run)");
+      await splash("First run: setting up the local engine…", "downloading Python + dependencies");
+      await backend.bootstrapRuntime(process.resourcesPath, (line) =>
+        splash("First run: setting up the local engine…", line)
+      );
+      log("runtime bootstrap complete");
+    }
+  }
+
+  await splash("Starting local engine…");
   startBackend();
   startUi();
   await waitFor(`${BACKEND_URL}/health`, 120_000);

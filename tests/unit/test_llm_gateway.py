@@ -157,3 +157,32 @@ def test_get_llm_gateway_fallback_disabled(monkeypatch):
 
     assert not isinstance(gateway, FallbackGateway)
     assert isinstance(gateway, _OkGateway)
+
+
+def test_missing_key_falls_back_to_ollama_at_construction(monkeypatch):
+    from app.core.config import settings
+    from app.generation.llm_gateway import OllamaGateway, get_llm_gateway
+
+    monkeypatch.setattr(settings, "llm_provider", "openai")
+    monkeypatch.setattr(settings, "openai_api_key", None)
+    monkeypatch.setattr(settings, "llm_fallback_to_ollama", True)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    assert isinstance(get_llm_gateway(), OllamaGateway)
+
+
+def test_missing_key_without_fallback_raises(monkeypatch):
+    import pytest as _pytest
+
+    from app.core.config import settings
+    from app.generation.llm_gateway import get_llm_gateway
+
+    monkeypatch.setattr(settings, "llm_provider", "openai")
+    monkeypatch.setattr(settings, "openai_api_key", None)
+    monkeypatch.setattr(settings, "llm_fallback_to_ollama", False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    import openai
+
+    with _pytest.raises(openai.OpenAIError):
+        get_llm_gateway()
