@@ -94,13 +94,8 @@ def _get_fernet():
     with _lock:
         if _fernet is not None:
             return _fernet
-        try:
-            from cryptography.fernet import Fernet
-        except ImportError as exc:  # pragma: no cover - guarded by the extra
-            raise RuntimeError(
-                "encryption is enabled but 'cryptography' is missing — install the "
-                "'encryption' extra (pip install -e '.[encryption]')"
-            ) from exc
+        # 'cryptography' is a base dependency; this guard is defensive only.
+        from cryptography.fernet import Fernet
         # Fernet needs 32 url-safe-base64 bytes; derive deterministically from the
         # configured passphrase/key. Fernet supplies its own IV + auth tag.
         derived = base64.urlsafe_b64encode(hashlib.sha256(key.encode()).digest())

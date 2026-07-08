@@ -92,14 +92,16 @@ questions and get cited, LLM-synthesized answers.
   tenant, to bound cardinality); per-tenant totals accrue in Redis and are read via
   **`GET /usage`**. Pricing is configurable (`llm_price_per_1k_*_usd`). Metering is
   best-effort — it never fails a request.
-- **Encryption at rest** (`app/core/crypto.py`, local mode only, opt-in via the
-  `encryption` extra): set `ENCRYPTION_KEY` (or `ENCRYPTION_KEY_FILE=true`) to
-  encrypt local state. The SQLite KV is whole-database SQLCipher (`PRAGMA key` in
+- **Encryption at rest** (`app/core/crypto.py`, local mode only, opt-in): set
+  `ENCRYPTION_KEY` (or `ENCRYPTION_KEY_FILE=true`) to encrypt local state. The
+  SQLite KV is whole-database SQLCipher (`PRAGMA key` in
   `app/db/backend.py._connect`) — covers key NAMES like `user:email:...`, not just
   values; Qdrant **chunk text** is Fernet-encrypted per-field (marker `enc:v1:`,
-  legacy plaintext passes through). Not covered: Qdrant structural metadata and
-  the embedding vectors. Enabling on an existing plaintext store needs a fresh
-  store; losing the key loses the data.
+  legacy plaintext passes through). Whole-DB KV encryption needs the `encryption`
+  extra (SQLCipher); Fernet field encryption does not (`cryptography` is a base
+  dep). Not covered: Qdrant structural metadata and the embedding vectors.
+  Enabling on an existing plaintext store needs a fresh store; losing the key
+  loses the data.
 - **Logging:** `structlog` (`app/core/logging.py`) — no `print()`, and never log key values.
 
 ### Desktop shell (`desktop/`)
