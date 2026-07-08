@@ -76,3 +76,68 @@ async def test_agent_returns_low_confidence_when_no_results():
     assert result.retrieved_chunks == []
     assert result.answer.startswith("I don't have enough")
     assert llm.calls == 1  # only the planning call; synthesis skipped
+
+
+async def test_agent_reflects_and_issues_follow_up_search():
+    # plan → search q1 → reflect proposes q2 → search q2 → synthesize → verify
+    llm = _ScriptedLLM(
+        [
+            '["q1"]',
+            '["q2"]',  # reflection: still missing something
+            '{"answer":"Done.","citations":[1],"confidence":"high"}',
+            '{"faithfulness":"grounded","unsupported_claims":[]}',
+        ]
+    )
+    a, b = _chunk(1), _chunk(2)
+    searcher = _MapSearcher({"q1": [a], "q2": [b]})
+
+    result = await AgenticRAG(searcher=searcher, llm=llm).run("q", top_k=5, max_steps=2)
+
+    assert searcher.queries == ["q1", "q2"]  # follow-up from reflection was searched
+    assert [s.sub_question for s in result.steps] == ["q1", "q2"]
+    assert len(result.retrieved_chunks) == 2  # evidence merged across steps
+    assert result.answer == "Done."
+
+
+async def test_agent_reflection_respects_step_budget():
+    # max_steps=1 → only the first planned query runs; no reflection/extra search
+    llm = _ScriptedLLM(
+        ['["q1","q2","q3"]', '{"answer":"A","citations":[],"confidence":"medium"}']
+    )
+    searcher = _MapSearcher({"q1": [_chunk(1)]}, default=[_chunk(9)])
+
+    result = await AgenticRAG(searcher=searcher, llm=llm).run("q", max_steps=1)
+
+    assert searcher.queries == ["q1"]  # budget of 1 respected
+    assert len(result.steps) == 1
+
+
+async def test_agent_downgrades_confidence_when_unsupported():
+    llm = _ScriptedLLM(
+        [
+            '["q1"]',
+            "[]",  # reflection: nothing more needed
+            '{"answer":"Maybe.","citations":[1],"confidence":"high"}',
+            '{"faithfulness":"unsupported","unsupported_claims":["fabricated"]}',
+        ]
+    )
+    searcher = _MapSearcher({"q1": [_chunk(1)]})
+
+    result = await AgenticRAG(searcher=searcher, llm=llm).run("q", max_steps=3)
+
+    assert result.confidence == "low"  # verifier flagged it, so we downgrade
+
+
+async def test_agent_reflection_can_be_disabled(monkeypatch):
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "agentic_reflection", False)
+    llm = _ScriptedLLM(
+        ['["q1"]', '{"answer":"A","citations":[],"confidence":"medium"}', "{}"]
+    )
+    searcher = _MapSearcher({"q1": [_chunk(1)]})
+
+    result = await AgenticRAG(searcher=searcher, llm=llm).run("q", max_steps=4)
+
+    assert searcher.queries == ["q1"]  # no reflection-driven follow-ups
+    assert len(result.steps) == 1

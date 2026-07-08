@@ -24,6 +24,7 @@ from app.generation.synthesis import (
 )
 from app.models.schemas import QueryRequest, QueryResponse
 from app.retrieval.search import Searcher
+from app.retrieval.self_correct import search_self_correcting
 
 logger = structlog.get_logger("api.query")
 
@@ -67,7 +68,9 @@ async def query(
         filters["collection_id"] = request.collection_id
 
     t_retrieval = time.perf_counter()
-    chunks = searcher.search(request.question, top_k=request.top_k, filters=filters or None)
+    chunks, reformulated = await search_self_correcting(
+        searcher, llm, request.question, top_k=request.top_k, filters=filters or None
+    )
     retrieval_ms = round((time.perf_counter() - t_retrieval) * 1000, 1)
     retrieved = [to_retrieved_chunk(c) for c in chunks]
 
@@ -81,6 +84,7 @@ async def query(
             tenant=principal.tenant_id,
             abstained=True,
             n_chunks=len(chunks),
+            reformulated=reformulated,
             retrieval_ms=retrieval_ms,
             total_ms=_elapsed_ms(start),
         )
@@ -119,6 +123,7 @@ async def query(
         n_chunks=len(chunks),
         confidence=confidence,
         faithfulness=faithfulness,
+        reformulated=reformulated,
         retrieval_ms=retrieval_ms,
         generation_ms=round((time.perf_counter() - t_generation) * 1000, 1),
         total_ms=_elapsed_ms(start),

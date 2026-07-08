@@ -1,10 +1,22 @@
 from uuid import UUID, uuid4
 
+from app.core.config import settings
 from app.models.schemas import ChunkMetadata, DocumentChunk
 
 DEFAULT_PARENT_SIZE = 1024
 DEFAULT_CHILD_SIZE = 256
 DEFAULT_OVERLAP = 50
+
+
+def build_chunk_context(metadata: ChunkMetadata) -> str | None:
+    """Cheap situating context for contextual retrieval: the document title
+    (falling back to the source name). Prepended to the chunk only at embedding
+    time so its vector reflects which document it belongs to. Returns None when
+    disabled or when there's nothing useful to add."""
+    if not settings.contextual_retrieval:
+        return None
+    label = metadata.title or metadata.source
+    return f"Document: {label}" if label else None
 
 
 def hierarchical_chunk(
@@ -21,6 +33,7 @@ def hierarchical_chunk(
     parent_text = ""
 
     words = text.split()
+    context = build_chunk_context(metadata)
 
     for child_index, i in enumerate(range(0, len(words), child_size - overlap)):
         child_words = words[i : i + child_size]
@@ -29,6 +42,7 @@ def hierarchical_chunk(
         chunk = DocumentChunk(
             id=uuid4(),
             text=child_text,
+            context=context,
             embedding=None,
             metadata=ChunkMetadata(
                 doc_id=doc_id,
