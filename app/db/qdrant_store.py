@@ -4,6 +4,7 @@ from uuid import UUID
 
 from qdrant_client.http import models as rest
 
+from app.core import crypto
 from app.core.config import settings
 from app.core.exceptions import RetrievalError
 from app.db.backend import get_qdrant_client
@@ -59,7 +60,10 @@ class QdrantStore:
                 id=str(chunk.id),
                 vector=self._build_vectors(chunk),
                 payload={
-                    "text": chunk.text,
+                    # Chunk text is the sensitive content — encrypted at rest when
+                    # enabled (no-op passthrough otherwise). Structural metadata and
+                    # filter fields stay cleartext so search/filter keep working.
+                    "text": crypto.encrypt_field(chunk.text),
                     "metadata": chunk.metadata.model_dump(mode="json"),
                 },
             )
@@ -126,7 +130,7 @@ class QdrantStore:
             meta = payload.get("metadata", {})
             chunk = DocumentChunk(
                 id=UUID(str(point.id)),
-                text=payload.get("text", ""),
+                text=crypto.decrypt_field(payload.get("text", "")),
                 embedding=None,
                 metadata=ChunkMetadata(**meta),
             )

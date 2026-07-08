@@ -5,6 +5,7 @@ from app.generation import llm_gateway
 from app.generation.llm_gateway import (
     AnthropicGateway,
     FallbackGateway,
+    LlamaCppGateway,
     LLMGateway,
     OllamaGateway,
     get_llm_gateway,
@@ -169,6 +170,67 @@ def test_missing_key_falls_back_to_ollama_at_construction(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
     assert isinstance(get_llm_gateway(), OllamaGateway)
+
+
+def test_get_llm_gateway_local_provider_is_not_wrapped(monkeypatch):
+    # A "local" provider is already fully local: no key, no Ollama fallback wrap.
+    monkeypatch.setattr(llm_gateway.settings, "llm_provider", "local")
+    monkeypatch.setattr(llm_gateway.settings, "llm_fallback_to_ollama", True)
+
+    gateway = get_llm_gateway()
+
+    assert isinstance(gateway, LlamaCppGateway)
+
+
+class _FakeLlama:
+    def __init__(self):
+        self.calls = []
+
+    def create_chat_completion(self, **kwargs):
+        self.calls.append(kwargs)
+        return {
+            "choices": [{"message": {"role": "assistant", "content": "local answer"}}],
+            "usage": {"prompt_tokens": 11, "completion_tokens": 7},
+        }
+
+
+async def test_llamacpp_gateway_completes_and_meters(monkeypatch):
+    fake = _FakeLlama()
+    monkeypatch.setattr(LlamaCppGateway, "_llama", fake)
+    recorded = []
+    monkeypatch.setattr(
+        llm_gateway.metering, "record", lambda *a, **k: recorded.append((a, k))
+    )
+
+    gateway = LlamaCppGateway()
+    out = await gateway.complete(
+        [{"role": "user", "content": "hi"}], temperature=0.4
+    )
+
+    assert out == "local answer"
+    assert fake.calls[0]["temperature"] == 0.4
+    assert fake.calls[0]["max_tokens"] == gateway.max_tokens
+    assert recorded and recorded[0][0][1:] == (11, 7)  # prompt/completion tokens metered
+
+
+def test_llamacpp_load_without_package_raises_helpful_error(monkeypatch):
+    # Force the llama_cpp import to fail and assert the message points at the extra.
+    monkeypatch.setattr(LlamaCppGateway, "_llama", None)
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _no_llama(name, *args, **kwargs):
+        if name == "llama_cpp":
+            raise ImportError("No module named 'llama_cpp'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _no_llama)
+
+    with pytest.raises(GenerationError) as exc_info:
+        LlamaCppGateway._load()
+
+    assert "local-llm" in str(exc_info.value)
 
 
 def test_missing_key_without_fallback_raises(monkeypatch):

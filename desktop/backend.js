@@ -21,6 +21,9 @@ const path = require("node:path");
 
 const PYTHON_VERSION = "3.11";
 const TORCH_INDEX = "https://download.pytorch.org/whl/cpu";
+// Prebuilt CPU wheels for llama-cpp-python (the bundled fully-local answer
+// engine) — avoids compiling native code inside the user's runtime.
+const LLAMA_CPP_INDEX = "https://abetlen.github.io/llama-cpp-python/whl/cpu";
 
 function repoRootOrNull() {
   const root = path.resolve(__dirname, "..");
@@ -81,6 +84,10 @@ async function bootstrapRuntime(resourcesPath, onProgress) {
     // --reinstall-package: a rebuilt wheel keeps its version; same-version
     // installs would otherwise be treated as already satisfied.
     [uv, ["pip", "install", "--python", python, "--reinstall-package", "dclaw-rag", wheel], env],
+    // Bundled fully-local answer engine (the default first-run choice). Installed
+    // from the prebuilt CPU wheel index so no compiler is needed on the user's
+    // machine; the GGUF weights download on first query, not here.
+    [uv, ["pip", "install", "--python", python, "llama-cpp-python", "--extra-index-url", LLAMA_CPP_INDEX], env],
   ];
 
   // The UI ships as a tarball: electron-builder's extraResources copy strips

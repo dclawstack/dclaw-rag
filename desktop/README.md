@@ -3,8 +3,9 @@
 One window, zero external services: an Electron shell that spawns the FastAPI
 backend in `APP_MODE=local` (SQLite KV + embedded Qdrant + inline ingestion)
 and serves the Next.js UI from its standalone build. Voice queries and audio
-ingestion run on the local whisper model; answers need an LLM (OpenRouter key
-or Ollama — see the repo `.env`).
+ingestion run on the local whisper model; answers can run on the bundled
+fully-local model (in-process llama.cpp, the default), an OpenRouter key, or a
+separate Ollama — see the first-run chooser below and the repo `.env`.
 
 **Why Electron (not Tauri):** the app payload is dominated by the Python
 backend and its models (~2GB), so Tauri's small-binary advantage is noise;
@@ -81,10 +82,15 @@ The UI ships as `ui.tar` and is extracted at bootstrap — electron-builder
 strips `node_modules`/dot-dirs from `extraResources`, so a plain directory
 arrives gutted.
 
-**LLM settings:** first packaged launch with no LLM configured shows a chooser
-(OpenRouter key, or Ollama model). The choice lives in `~/.dclaw-rag/desktop.env`
-(plain KEY=VALUE, editable — e.g. `LLM_PROVIDER=ollama` +
-`OLLAMA_MODEL=llama3.2:3b`) and is merged into the backend env on launch;
+**LLM settings:** first packaged launch with no LLM configured shows a chooser.
+The default is **Fully local** (`LLM_PROVIDER=local`) — the bundled in-process
+llama.cpp GGUF, no key and nothing leaves the machine; the ~2GB model downloads
+once on first query (like the embedding/whisper models) and then runs offline.
+The other options are an OpenRouter key or a separate Ollama. The `local-llm`
+wheel (`llama-cpp-python`, prebuilt CPU) is installed during the runtime
+bootstrap so "Fully local" works without a re-bootstrap. The choice lives in
+`~/.dclaw-rag/desktop.env` (plain KEY=VALUE, editable — e.g. `LLM_PROVIDER=ollama`
++ `OLLAMA_MODEL=llama3.2:3b`) and is merged into the backend env on launch;
 explicitly exported env vars win. Dev mode ignores it (the repo `.env` rules).
 
 Packaged self-test: `./dist/*.AppImage --appimage-extract-and-run --self-test`
