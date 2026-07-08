@@ -59,7 +59,13 @@ questions and get cited, LLM-synthesized answers.
   the content sniffs as NUL-free UTF-8; binaries are rejected). Note: text extraction —
   including audio transcription — currently runs on the request path; only
   chunk/embed/upsert is async.
-- **Generation** (`app/generation/`): `LLMGateway` (OpenAI / Anthropic) + Jinja prompt.
+- **Generation** (`app/generation/`): `LLMGateway` + Jinja prompt. Providers
+  (`LLM_PROVIDER`): `openai`, `anthropic`, `openrouter`, `ollama` (separate daemon),
+  and `local` — a bundled **in-process llama.cpp GGUF** runner (`LlamaCppGateway`,
+  no daemon, no network at inference; needs the `local-llm` extra). The GGUF
+  downloads from Hugging Face once (cached under `data_dir/models`) unless
+  `LOCAL_LLM_MODEL_PATH` is set. `local`/`ollama` are already local, so they are
+  never wrapped in the Ollama fallback.
 - **Voice queries** (`app/api/routes/transcribe.py`, `app/ingestion/transcriber.py`):
   `POST /transcribe` turns an uploaded audio clip into text via local faster-whisper
   (lazy-loaded singleton, CPU int8); the query page's mic button records with
@@ -86,6 +92,14 @@ questions and get cited, LLM-synthesized answers.
   tenant, to bound cardinality); per-tenant totals accrue in Redis and are read via
   **`GET /usage`**. Pricing is configurable (`llm_price_per_1k_*_usd`). Metering is
   best-effort — it never fails a request.
+- **Encryption at rest** (`app/core/crypto.py`, local mode only, opt-in via the
+  `encryption` extra): set `ENCRYPTION_KEY` (or `ENCRYPTION_KEY_FILE=true`) to
+  encrypt local state. The SQLite KV is whole-database SQLCipher (`PRAGMA key` in
+  `app/db/backend.py._connect`) — covers key NAMES like `user:email:...`, not just
+  values; Qdrant **chunk text** is Fernet-encrypted per-field (marker `enc:v1:`,
+  legacy plaintext passes through). Not covered: Qdrant structural metadata and
+  the embedding vectors. Enabling on an existing plaintext store needs a fresh
+  store; losing the key loses the data.
 - **Logging:** `structlog` (`app/core/logging.py`) — no `print()`, and never log key values.
 
 ### Desktop shell (`desktop/`)
@@ -209,8 +223,9 @@ secrets/CORS/LLM-provider keys are missing (`validate_runtime_config`).
 | `print()` for diagnostics | Unstructured logs | `structlog` |
 
 ## Notes / Known Gaps
-- The `LLMGateway` supports OpenAI/Anthropic, with an automatic local **Ollama** fallback
-  when the cloud provider errors (`FallbackGateway`; toggle via `LLM_FALLBACK_TO_OLLAMA`).
+- The `LLMGateway` supports OpenAI/Anthropic/OpenRouter/Ollama and a bundled
+  in-process **llama.cpp** (`LLM_PROVIDER=local`), with an automatic local **Ollama**
+  fallback when a cloud provider errors (`FallbackGateway`; `LLM_FALLBACK_TO_OLLAMA`).
 - A `celery`/`app.tasks` worker is referenced in `infra/docker-compose.yml` but the task
   module does not exist yet.
 - Agentic (multi-step) RAG is not implemented (PRD P0.4).

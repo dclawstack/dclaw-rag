@@ -39,6 +39,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Bundled, fully-local answer engine (in-process llama.cpp GGUF runner). Kept
+# out of the base install because the wheel compiles native code and most
+# deployments use a cloud provider; opt in for offline/local-first installs.
+local-llm = [
+    "llama-cpp-python>=0.3.0",
+]
+# At-rest encryption for local-mode state: whole-DB SQLCipher for the SQLite KV
+# and Fernet for Qdrant chunk text. Opt-in — see ENCRYPTION_KEY in .env.example.
+encryption = [
+    "sqlcipher3-binary>=0.6.0",
+    "cryptography>=42.0.0",
+]
 dev = [
     "pytest>=8.2.0",
     "pytest-asyncio>=0.23.0",

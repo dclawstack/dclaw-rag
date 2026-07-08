@@ -40,13 +40,18 @@ const FORM_HTML = `<body style="font-family:sans-serif;background:#111;color:#ee
   Generating the final written answer needs a language model:</p>
   <form id="f">
     <label style="display:block;margin:10px 0">
-      <input type="radio" name="provider" value="openrouter" checked>
+      <input type="radio" name="provider" value="local" checked>
+      <b>Fully local</b> (bundled model — <span style="color:#aaa">no key, nothing leaves your machine</span>)
+    </label>
+    <p style="font-size:12px;color:#888;margin:2px 0 12px 22px">Downloads a ~2&nbsp;GB model once on first use, then runs offline.</p>
+    <label style="display:block;margin:10px 0">
+      <input type="radio" name="provider" value="openrouter">
       <b>OpenRouter</b> (bring your own key — <span style="color:#aaa">openrouter.ai/keys</span>)
     </label>
     <input id="key" placeholder="sk-or-..." style="width:100%;padding:6px;background:#222;color:#eee;border:1px solid #444">
     <label style="display:block;margin:14px 0 4px">
       <input type="radio" name="provider" value="ollama">
-      <b>Ollama</b> (fully local — needs Ollama running)
+      <b>Ollama</b> (local — needs a separate Ollama running)
     </label>
     <input id="model" placeholder="model, e.g. llama3.2:3b" style="width:100%;padding:6px;background:#222;color:#eee;border:1px solid #444">
     <div style="margin-top:18px;display:flex;gap:8px">
@@ -70,6 +75,11 @@ const FORM_HTML = `<body style="font-family:sans-serif;background:#111;color:#ee
 
 function buildEnvFile(params) {
   const provider = params.get("provider");
+  if (provider === "local") {
+    // Bundled in-process llama.cpp GGUF — no key, no external service. The
+    // model downloads on first query (see LOCAL_LLM_* in .env.example).
+    return "LLM_PROVIDER=local\n";
+  }
   if (provider === "openrouter" && params.get("key")) {
     return `LLM_PROVIDER=openrouter\nOPENROUTER_API_KEY=${params.get("key")}\n`;
   }

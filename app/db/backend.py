@@ -24,6 +24,26 @@ if TYPE_CHECKING:
     from qdrant_client import QdrantClient
 
 
+def _connect(path: str, encryption_key: str | None) -> sqlite3.Connection:
+    """A SQLite connection — plaintext, or whole-database SQLCipher when a key is
+    given. SQLCipher is a drop-in DBAPI: after ``PRAGMA key`` the same SQL runs,
+    but the file (values AND key names, e.g. emails) is encrypted at rest."""
+    if not encryption_key:
+        return sqlite3.connect(path, check_same_thread=False)
+    try:
+        import sqlcipher3.dbapi2 as sqlcipher
+    except ImportError as exc:
+        raise RuntimeError(
+            "encryption is enabled but 'sqlcipher3' is missing — install the "
+            "'encryption' extra (pip install -e '.[encryption]')"
+        ) from exc
+    conn = sqlcipher.connect(path, check_same_thread=False)
+    # PRAGMA key must be the first statement and takes a literal; escape quotes
+    # (the key is trusted config, but a passphrase may legitimately contain one).
+    conn.execute(f"PRAGMA key = '{encryption_key.replace(chr(39), chr(39) * 2)}'")
+    return conn
+
+
 class LocalKV:
     """SQLite-backed shim over the Redis subset the stores use.
 
@@ -32,11 +52,11 @@ class LocalKV:
     threads (one connection, one lock — WAL keeps readers cheap).
     """
 
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, encryption_key: str | None = None) -> None:
         import pathlib
 
         pathlib.Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(path, check_same_thread=False)
+        self._conn = _connect(path, encryption_key)
         self._lock = threading.RLock()
         with self._lock, self._conn:
             self._conn.execute("PRAGMA journal_mode=WAL")
@@ -186,7 +206,9 @@ def make_kv() -> KVClient:
         global _local_kv
         with _backend_lock:
             if _local_kv is None:
-                _local_kv = LocalKV(str(settings.sqlite_path))
+                from app.core import crypto
+
+                _local_kv = LocalKV(str(settings.sqlite_path), crypto.encryption_key())
             return _local_kv
     return redis.from_url(settings.redis_url, decode_responses=True)
 

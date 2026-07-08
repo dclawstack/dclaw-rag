@@ -1,4 +1,6 @@
+import threading
 from abc import ABC, abstractmethod
+from typing import Any
 
 import structlog
 
@@ -107,6 +109,99 @@ class OllamaGateway(LLMGateway):
             raise GenerationError(f"Ollama completion failed: {exc}") from exc
 
 
+class LlamaCppGateway(LLMGateway):
+    """In-process llama.cpp GGUF runner — the bundled, fully-local answer engine.
+
+    No second daemon and no network at inference time (contrast OllamaGateway,
+    which talks to a separate `ollama serve`). The model weights are heavy, so
+    the underlying `Llama` object is a process-wide singleton loaded lazily on
+    the first completion; `create_chat_completion` is blocking, so we run it off
+    the event loop. The GGUF is loaded from `local_llm_model_path` if set,
+    otherwise downloaded once from Hugging Face and cached under data_dir/models.
+    """
+
+    _llama: Any | None = None
+    _lock = threading.Lock()
+
+    def __init__(self) -> None:
+        self.max_tokens = settings.local_llm_max_tokens
+        # Label for metering — the file/repo the answer actually came from.
+        self.model = settings.local_llm_model_path or settings.local_llm_model_file
+
+    @classmethod
+    def _get_llama(cls) -> Any:
+        if cls._llama is None:
+            with cls._lock:
+                if cls._llama is None:
+                    cls._llama = cls._load()
+        return cls._llama
+
+    @staticmethod
+    def _load() -> Any:
+        try:
+            from llama_cpp import Llama
+        except ImportError as exc:
+            raise GenerationError(
+                "local LLM provider requires 'llama-cpp-python' — install the "
+                "'local-llm' extra (pip install -e '.[local-llm]')"
+            ) from exc
+
+        common: dict[str, Any] = {
+            "n_ctx": settings.local_llm_n_ctx,
+            "verbose": False,
+        }
+        if settings.local_llm_n_threads is not None:
+            common["n_threads"] = settings.local_llm_n_threads
+        try:
+            if settings.local_llm_model_path:
+                logger.info("local_llm_loading", path=settings.local_llm_model_path)
+                return Llama(model_path=settings.local_llm_model_path, **common)
+            settings.local_llm_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(
+                "local_llm_loading",
+                repo=settings.local_llm_model_repo,
+                file=settings.local_llm_model_file,
+            )
+            return Llama.from_pretrained(
+                repo_id=settings.local_llm_model_repo,
+                filename=settings.local_llm_model_file,
+                cache_dir=str(settings.local_llm_dir),
+                **common,
+            )
+        except Exception as exc:  # download / load / OOM
+            raise GenerationError(f"local LLM model failed to load: {exc}") from exc
+
+    async def complete(self, messages: list[dict], temperature: float = 0.2) -> str:
+        import anyio
+
+        llama = self._get_llama()
+
+        def _run() -> str:
+            response = llama.create_chat_completion(
+                messages=messages,
+                temperature=temperature,
+                max_tokens=self.max_tokens,
+            )
+            usage = response.get("usage")
+            if usage:
+                metering.record(
+                    self.model,
+                    usage.get("prompt_tokens", 0),
+                    usage.get("completion_tokens", 0),
+                )
+            choices = response.get("choices") or []
+            if not choices:
+                return ""
+            return choices[0].get("message", {}).get("content", "") or ""
+
+        try:
+            return await anyio.to_thread.run_sync(_run)
+        except GenerationError:
+            raise
+        except Exception as exc:
+            raise GenerationError(f"local LLM completion failed: {exc}") from exc
+
+
 class FallbackGateway(LLMGateway):
     """Try the primary (cloud) gateway; on failure, fall back to a local one."""
 
@@ -146,7 +241,14 @@ def _build_gateway(provider: str) -> LLMGateway:
         return AnthropicGateway()
     if provider == "ollama":
         return OllamaGateway()
+    if provider == "local":
+        return LlamaCppGateway()
     raise GenerationError(f"Unsupported LLM provider: {provider}")
+
+
+# Providers that are already fully local: they need no key and it makes no sense
+# to wrap them in an Ollama fallback.
+_LOCAL_PROVIDERS = {"ollama", "local"}
 
 
 def get_llm_gateway() -> LLMGateway:
@@ -157,12 +259,12 @@ def get_llm_gateway() -> LLMGateway:
         # A missing key can fail at client CONSTRUCTION (e.g. openai raises
         # before any completion is attempted) — honor the Ollama fallback
         # instead of turning every query into a 500.
-        if provider != "ollama" and settings.llm_fallback_to_ollama:
+        if provider not in _LOCAL_PROVIDERS and settings.llm_fallback_to_ollama:
             logger.warning(
                 "llm_primary_unavailable_using_fallback", provider=provider, error=str(exc)
             )
             return OllamaGateway()
         raise
-    if provider != "ollama" and settings.llm_fallback_to_ollama:
+    if provider not in _LOCAL_PROVIDERS and settings.llm_fallback_to_ollama:
         return FallbackGateway(primary, OllamaGateway())
     return primary

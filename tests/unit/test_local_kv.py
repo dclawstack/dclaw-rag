@@ -1,6 +1,8 @@
 """LocalKV semantics the store tests don't reach: expiry, counters, setnx —
 each must match redis-py with decode_responses=True."""
 
+from pathlib import Path
+
 import pytest
 
 from app.db.backend import LocalKV
@@ -103,3 +105,30 @@ def test_persists_across_instances(tmp_path):
     path = str(tmp_path / "kv.sqlite3")
     LocalKV(path).set("k", "v")
     assert LocalKV(path).get("k") == "v"
+
+
+def test_encrypted_kv_roundtrips_but_file_is_ciphertext(tmp_path):
+    pytest.importorskip("sqlcipher3", reason="encryption extra not installed")
+    path = str(tmp_path / "kv.sqlite3")
+
+    # Same LocalKV semantics, but SQLCipher-backed: emails live in KEY names
+    # (user:email:...), so whole-DB encryption is what protects them.
+    kv = LocalKV(path, encryption_key="pass-phrase-123")
+    kv.set("user:email:jane@example.com", "user-42")
+    kv.sadd("docs:t:acme", "doc-1", "doc-2")
+    assert kv.get("user:email:jane@example.com") == "user-42"
+    assert kv.incr("counter") == 1
+
+    raw = Path(path).read_bytes()
+    assert b"jane@example.com" not in raw  # key names encrypted, not just values
+    assert b"user-42" not in raw
+    assert raw[:16] != b"SQLite format 3\x00"  # no plaintext SQLite header
+
+    # Reopening with the key recovers the data; the wrong key cannot.
+    assert LocalKV(path, encryption_key="pass-phrase-123").get(
+        "user:email:jane@example.com"
+    ) == "user-42"
+    import sqlcipher3
+
+    with pytest.raises(sqlcipher3.dbapi2.DatabaseError):
+        LocalKV(path, encryption_key="wrong-key").get("counter")

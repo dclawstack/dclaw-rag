@@ -22,6 +22,16 @@ class Settings(BaseSettings):
     app_mode: str = "server"  # server | local
     data_dir: str = "~/.dclaw-rag"  # local-mode state root (SQLite + Qdrant files)
 
+    # Encryption at rest for local-mode state (SQLite KV via SQLCipher whole-DB;
+    # Qdrant chunk text via Fernet). Off by default — server deployments rely on
+    # infrastructure disk/volume encryption. Turn it on for regulated/local-first
+    # users. Needs the 'encryption' extra. Enabling on an EXISTING plaintext store
+    # requires a fresh store (SQLCipher can't open an unencrypted DB) — losing the
+    # key loses the data. Either set encryption_key directly, or set
+    # encryption_key_file=True to load/generate a key at data_dir/encryption.key.
+    encryption_key: str | None = None
+    encryption_key_file: bool = False
+
     api_host: str = "0.0.0.0"
     api_port: int = 8090
 
@@ -52,10 +62,22 @@ class Settings(BaseSettings):
     qdrant_collection: str = "dclaw_docs"
     qdrant_api_key: str | None = None
 
-    llm_provider: str = "openai"  # openai | anthropic | openrouter | ollama
+    llm_provider: str = "openai"  # openai | anthropic | openrouter | ollama | local
     llm_model: str = "gpt-4o-mini"
     openai_api_key: str | None = None
     anthropic_api_key: str | None = None
+
+    # Bundled local LLM (llama.cpp, in-process GGUF — no daemon, no network at
+    # inference). The model file is downloaded from Hugging Face once on first
+    # use (cached under data_dir/models) unless local_llm_model_path points at an
+    # existing .gguf. This is the fully-local answer engine — pair with local
+    # embeddings + whisper for an offline install.
+    local_llm_model_repo: str = "bartowski/Qwen2.5-3B-Instruct-GGUF"
+    local_llm_model_file: str = "Qwen2.5-3B-Instruct-Q4_K_M.gguf"
+    local_llm_model_path: str | None = None  # explicit .gguf; skips the HF download
+    local_llm_n_ctx: int = 4096
+    local_llm_n_threads: int | None = None  # None -> llama.cpp picks a default
+    local_llm_max_tokens: int = 2048
 
     # OpenRouter (OpenAI-compatible gateway to many hosted models)
     openrouter_api_key: str | None = None
@@ -122,6 +144,14 @@ class Settings(BaseSettings):
     @property
     def qdrant_path(self) -> Path:
         return Path(self.data_dir).expanduser() / "qdrant"
+
+    @property
+    def local_llm_dir(self) -> Path:
+        return Path(self.data_dir).expanduser() / "models"
+
+    @property
+    def encryption_key_path(self) -> Path:
+        return Path(self.data_dir).expanduser() / "encryption.key"
 
 
 settings = Settings()
