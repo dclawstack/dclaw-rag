@@ -110,6 +110,15 @@ class Settings(BaseSettings):
     # step budget (AgentRequest.max_steps) is spent.
     agentic_reflection: bool = True
 
+    # Visual-document ingestion (E3, needs the 'vision' extra: pdfplumber +
+    # pytesseract + Pillow + pymupdf, plus the system `tesseract` binary for OCR).
+    # All lazy — the non-visual path never loads them. Tables are pulled out of
+    # PDFs; PDFs with little/no extractable text (scanned) are OCR'd, as are
+    # image uploads (png/jpg/tiff/...).
+    extract_tables: bool = True
+    ocr_scanned_pdfs: bool = True
+    ocr_min_chars: int = 100  # below this many extracted chars a PDF is treated as scanned
+
     # LLM pricing for usage/cost metering (USD per 1K tokens). Defaults are
     # Sonnet-tier; set these to match your configured model/provider.
     llm_price_per_1k_input_usd: float = 0.003

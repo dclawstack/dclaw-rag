@@ -55,6 +55,15 @@ local-llm = [
 encryption = [
     "sqlcipher3-binary>=0.6.0",
 ]
+# Visual-document ingestion: PDF table extraction (pdfplumber), OCR of scanned
+# PDFs + image uploads (pytesseract + Pillow, needs the system `tesseract`
+# binary), and PDF page rasterization (pymupdf). Opt-in; all imported lazily.
+vision = [
+    "pdfplumber>=0.11.0",
+    "pytesseract>=0.3.10",
+    "Pillow>=10.0.0",
+    "pymupdf>=1.24.0",
+]
 dev = [
     "pytest>=8.2.0",
     "pytest-asyncio>=0.23.0",

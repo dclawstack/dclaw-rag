@@ -68,6 +68,19 @@ questions and get cited, LLM-synthesized answers.
   the content sniffs as NUL-free UTF-8; binaries are rejected). Note: text extraction —
   including audio transcription — currently runs on the request path; only
   chunk/embed/upsert is async.
+- **Visual documents** (`vision` extra, all lazy — `app/ingestion/extractors/ocr.py`):
+  PDFs also get **table extraction** (pdfplumber → pipe-delimited text) and, when a
+  PDF has little/no extractable text (scanned), **OCR** of rasterized pages
+  (pymupdf + pytesseract); **image uploads** (png/jpg/tiff/…) ingest via OCR
+  (`ImageExtractor`). Gated by `EXTRACT_TABLES` / `OCR_SCANNED_PDFS`; needs the
+  system `tesseract` binary. Missing deps degrade gracefully for tables, and raise
+  a clear error for image OCR.
+- **Local folder connector** (`app/ingestion/folder_connector.py`,
+  `scripts/sync_folder.py`): sync a directory into the index — recursive, with an
+  mtime/size **manifest** so unchanged files skip re-extraction, removed files drop
+  out, and a polling `watch` mode. Content dedup stays with the pipeline (checksum).
+  Local-first: no cloud. A cloud connector was **deliberately deferred** — see
+  `docs/reference/decision-cloud-connector.md`.
 - **Generation** (`app/generation/`): `LLMGateway` + Jinja prompt. Providers
   (`LLM_PROVIDER`): `openai`, `anthropic`, `openrouter`, `ollama` (separate daemon),
   and `local` — a bundled **in-process llama.cpp GGUF** runner (`LlamaCppGateway`,

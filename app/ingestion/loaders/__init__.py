@@ -8,6 +8,7 @@ from app.ingestion.extractors.docx import DocxExtractor
 from app.ingestion.extractors.email import EmailExtractor
 from app.ingestion.extractors.epub import EpubExtractor
 from app.ingestion.extractors.html import HTMLExtractor
+from app.ingestion.extractors.image import ImageExtractor
 from app.ingestion.extractors.markdown import MarkdownExtractor
 from app.ingestion.extractors.pdf import PDFExtractor
 from app.ingestion.extractors.pptx import PptxExtractor
@@ -27,8 +28,15 @@ _EXTRACTORS: list[type[Extractor]] = [
     EmailExtractor,
     RTFExtractor,
     AudioExtractor,
+    ImageExtractor,
     PlainTextExtractor,
 ]
+
+# All file extensions with a dedicated extractor (used by the folder connector
+# to decide what to sync; unknown extensions still ingest via the text sniff).
+SUPPORTED_EXTENSIONS: frozenset[str] = frozenset(
+    ext for cls in _EXTRACTORS for ext in cls.supported_extensions
+)
 
 _SNIFF_BYTES = 8192
 
