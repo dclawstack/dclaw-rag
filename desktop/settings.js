@@ -90,6 +90,24 @@ function buildEnvFile(params) {
   return "# no LLM configured yet — see desktop/README.md\n";
 }
 
+/**
+ * Zero-config onboarding (E5.14): with no LLM configured, silently default to
+ * the bundled fully-local model so the app is usable the moment it opens — no
+ * setup, no key. Writes desktop.env so the user can later switch to OpenRouter /
+ * Ollama by editing that file. Returns true if it wrote the default.
+ */
+function ensureDefaultLocalLLM() {
+  if (readDesktopEnv()) return false; // a choice already exists
+  fs.mkdirSync(path.dirname(ENV_FILE), { recursive: true });
+  fs.writeFileSync(
+    ENV_FILE,
+    "# Zero-config default: the bundled fully-local model (no key, nothing leaves\n" +
+      "# your machine). Change to OpenRouter or Ollama by editing the lines below.\n" +
+      "LLM_PROVIDER=local\n"
+  );
+  return true;
+}
+
 /** Show the first-run form; resolves once a choice is stored (or skipped). */
 function firstRunSettings() {
   const { BrowserWindow } = require("electron");
@@ -110,4 +128,10 @@ function firstRunSettings() {
   });
 }
 
-module.exports = { ENV_FILE, readDesktopEnv, desktopEnvDefaults, firstRunSettings };
+module.exports = {
+  ENV_FILE,
+  readDesktopEnv,
+  desktopEnvDefaults,
+  firstRunSettings,
+  ensureDefaultLocalLLM,
+};

@@ -29,6 +29,7 @@ const SELF_TEST = process.argv.includes("--self-test");
 
 const backend = require("./backend");
 const settings = require("./settings");
+const { initAutoUpdate } = require("./update");
 
 const repoRoot = backend.repoRootOrNull() || path.resolve(__dirname, "..");
 const children = [];
@@ -372,7 +373,10 @@ async function main() {
       )
       .catch(() => {});
 
-  // Packaged first run with no LLM configured anywhere: ask once.
+  // Zero-config onboarding (E5.14): packaged first run with no LLM configured
+  // anywhere defaults silently to the bundled fully-local model, so the app is
+  // usable immediately with no setup. Users switch to OpenRouter/Ollama by
+  // editing ~/.dclaw-rag/desktop.env.
   if (
     !SELF_TEST &&
     !backend.repoRootOrNull() &&
@@ -380,7 +384,9 @@ async function main() {
     !process.env.OPENROUTER_API_KEY &&
     !process.env.LLM_PROVIDER
   ) {
-    await settings.firstRunSettings();
+    if (settings.ensureDefaultLocalLLM()) {
+      log("first run: defaulted to the bundled local model (zero-config)");
+    }
   }
 
   // Packaged first run: install the private Python runtime (one-off, ~2GB —
@@ -422,6 +428,9 @@ async function main() {
 
   await win.loadURL(UI_URL);
   loading.destroy();
+
+  // Background auto-update check (packaged, non-self-test only).
+  initAutoUpdate({ isPackaged: !backend.repoRootOrNull(), selfTest: SELF_TEST, log });
 
   if (SELF_TEST) {
     await selfTest(win);

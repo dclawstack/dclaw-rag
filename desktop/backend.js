@@ -21,6 +21,16 @@ const path = require("node:path");
 
 const PYTHON_VERSION = "3.11";
 const TORCH_INDEX = "https://download.pytorch.org/whl/cpu";
+
+// Platform-specific layout: on Windows a venv's interpreter lives in Scripts\
+// (python.exe) and the bundled uv is uv.exe.
+const IS_WIN = process.platform === "win32";
+const UV_BIN = IS_WIN ? "uv.exe" : "uv";
+function venvPython(venvDir) {
+  return IS_WIN
+    ? path.join(venvDir, "Scripts", "python.exe")
+    : path.join(venvDir, "bin", "python");
+}
 // Prebuilt CPU wheels for llama-cpp-python (the bundled fully-local answer
 // engine) — avoids compiling native code inside the user's runtime.
 const LLAMA_CPP_INDEX = "https://abetlen.github.io/llama-cpp-python/whl/cpu";
@@ -69,13 +79,13 @@ function packagedUiServer() {
  */
 async function bootstrapRuntime(resourcesPath, onProgress) {
   const backendDir = bundledBackendDir(resourcesPath);
-  const uv = path.join(backendDir, "uv");
+  const uv = path.join(backendDir, UV_BIN);
   const wheel = findWheel(backendDir);
   const venv = path.join(runtimeDir(), "venv");
   fs.mkdirSync(runtimeDir(), { recursive: true });
 
   const env = { ...process.env, UV_PYTHON_INSTALL_DIR: path.join(runtimeDir(), "python") };
-  const python = path.join(venv, "bin", "python");
+  const python = venvPython(venv);
   const steps = [
     [uv, ["venv", venv, "--python", PYTHON_VERSION, "--allow-existing"], env],
     // CPU torch first (mirrors CI/Dockerfile) so the app install resolves
@@ -124,10 +134,10 @@ function backendLaunch(resourcesPath) {
   }
   const repo = repoRootOrNull();
   if (repo) {
-    const venv = path.join(repo, ".venv", "bin", "python");
-    return { python: fs.existsSync(venv) ? venv : "python3", cwd: repo };
+    const venv = venvPython(path.join(repo, ".venv"));
+    return { python: fs.existsSync(venv) ? venv : IS_WIN ? "python" : "python3", cwd: repo };
   }
-  return { python: path.join(runtimeDir(), "venv", "bin", "python"), cwd: os.homedir() };
+  return { python: venvPython(path.join(runtimeDir(), "venv")), cwd: os.homedir() };
 }
 
 /** Best-effort sanity check that a python can import the app. */

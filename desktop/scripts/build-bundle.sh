@@ -14,8 +14,15 @@ mkdir -p "$BUNDLE/backend"
 (cd "$REPO_ROOT" && uv build --wheel --out-dir "$BUNDLE/backend")
 
 echo "==> uv binary"
-cp "$(command -v uv)" "$BUNDLE/backend/uv"
-chmod +x "$BUNDLE/backend/uv"
+# Bundle the host uv — so this must run on the SAME OS/arch as the target build
+# (per-OS in the release matrix; see DISTRIBUTION.md). Name it uv.exe on Windows
+# so the launcher can spawn it (backend.js resolves uv.exe there).
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*) UV_OUT="uv.exe" ;;
+  *) UV_OUT="uv" ;;
+esac
+cp "$(command -v uv)" "$BUNDLE/backend/$UV_OUT"
+chmod +x "$BUNDLE/backend/$UV_OUT"
 
 # Voice fixture so `--self-test` works in the packaged app too.
 cp "$REPO_ROOT/tests/fixtures/voice_query.mp3" "$BUNDLE/backend/voice_query.mp3"

@@ -9,8 +9,13 @@
     "build:ui": "cd ../frontend && NEXT_PUBLIC_API_URL=http://127.0.0.1:8090 NEXT_PUBLIC_API_KEY=sk_local npm run build && rm -rf .next/standalone/.next/static .next/standalone/public && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public",
     "build:bundle": "bash scripts/build-bundle.sh",
     "dist": "npm run build:ui && npm run build:bundle && electron-builder --linux",
+    "dist:mac": "npm run build:ui && npm run build:bundle && electron-builder --mac",
+    "dist:win": "npm run build:ui && npm run build:bundle && electron-builder --win",
     "start": "electron .",
     "self-test": "electron . --self-test"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
   },
   "devDependencies": {
     "electron": "^43.0.0",
@@ -19,10 +24,12 @@
   "build": {
     "appId": "ai.dclaw.rag",
     "productName": "DClaw RAG",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "files": [
       "main.js",
       "backend.js",
-      "settings.js"
+      "settings.js",
+      "update.js"
     ],
     "extraResources": [
       {
@@ -35,15 +42,51 @@
       }
     ],
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "build"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "dclawstack",
+        "repo": "dclaw-rag"
+      }
+    ],
     "linux": {
       "target": [
         "AppImage",
         "deb"
       ],
+      "icon": "build/icon.png",
       "category": "Office",
       "maintainer": "dclawstack"
+    },
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["arm64", "x64"] },
+        { "target": "zip", "arch": ["arm64", "x64"] }
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "dmg": {
+      "title": "${productName} ${version}"
+    },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false
     }
   }
 }

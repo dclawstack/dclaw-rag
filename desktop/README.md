@@ -82,21 +82,30 @@ The UI ships as `ui.tar` and is extracted at bootstrap — electron-builder
 strips `node_modules`/dot-dirs from `extraResources`, so a plain directory
 arrives gutted.
 
-**LLM settings:** first packaged launch with no LLM configured shows a chooser.
-The default is **Fully local** (`LLM_PROVIDER=local`) — the bundled in-process
-llama.cpp GGUF, no key and nothing leaves the machine; the ~2GB model downloads
-once on first query (like the embedding/whisper models) and then runs offline.
-The other options are an OpenRouter key or a separate Ollama. The `local-llm`
-wheel (`llama-cpp-python`, prebuilt CPU) is installed during the runtime
-bootstrap so "Fully local" works without a re-bootstrap. The choice lives in
-`~/.dclaw-rag/desktop.env` (plain KEY=VALUE, editable — e.g. `LLM_PROVIDER=ollama`
-+ `OLLAMA_MODEL=llama3.2:3b`) and is merged into the backend env on launch;
+**LLM settings — zero-config (E5.14):** first packaged launch with no LLM
+configured **silently defaults to Fully local** (`LLM_PROVIDER=local`) — the
+bundled in-process llama.cpp GGUF, no key and nothing leaves the machine; the
+~2GB model downloads once on first query (like the embedding/whisper models) and
+then runs offline. So install → ask works with zero setup. The `local-llm` wheel
+(`llama-cpp-python`, prebuilt CPU) is installed during the runtime bootstrap so
+this works without a re-bootstrap. To use OpenRouter or Ollama instead, edit
+`~/.dclaw-rag/desktop.env` (plain KEY=VALUE — e.g. `LLM_PROVIDER=ollama` +
+`OLLAMA_MODEL=llama3.2:3b`); it's merged into the backend env on launch and
 explicitly exported env vars win. Dev mode ignores it (the repo `.env` rules).
+(`settings.firstRunSettings()` still holds the interactive chooser UI for a
+future in-app settings screen.)
+
+**Packaging (E5.13):** `npm run dist` (Linux), `dist:mac`, `dist:win` — see
+[`DISTRIBUTION.md`](./DISTRIBUTION.md) for the per-OS matrix, code
+signing/notarization, auto-update (electron-updater ← GitHub Releases), and the
+shared icon (`build/icon.png`). The `.github/workflows/desktop-build.yml` matrix
+is manual-dispatch.
 
 Packaged self-test: `./dist/*.AppImage --appimage-extract-and-run --self-test`
 (uses a throwaway data dir; honors env overrides like `OLLAMA_MODEL=...`).
 
 ## Not done yet (tracker: `dclaw-rag-desktop`)
 
-- macOS/Windows targets, signing, auto-update, app icon
+- **Signed/notarized** macOS + Windows installers (config is ready; needs certs
+  + per-OS runners — see `DISTRIBUTION.md`)
 - re-opening the settings window from inside the app (edit the file for now)
