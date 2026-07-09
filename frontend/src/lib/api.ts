@@ -47,6 +47,9 @@ export interface QueryResponse {
   abstained?: boolean;
   faithfulness?: "grounded" | "partial" | "unsupported" | null;
   unsupported_claims?: string[];
+  reformulated_query?: string | null;
+  stale_sources?: string[];
+  contradictions?: string[];
   latency_ms: number;
 }
 

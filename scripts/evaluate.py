@@ -107,6 +107,13 @@ async def _grade_answers(data: dict, searcher, top_k: int) -> list[float]:
     return scores
 
 
+def _append_history(history_path: Path, record: dict) -> None:
+    """Append one JSON line of eval metrics so quality can be tracked over time."""
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    with history_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record) + "\n")
+
+
 def run(
     golden_path: Path,
     top_k: int,
@@ -114,6 +121,7 @@ def run(
     min_mrr: float,
     min_abstain: float,
     min_answer_score: float,
+    history_path: Path | None = None,
 ) -> int:
     data = json.loads(golden_path.read_text())
 
@@ -187,6 +195,25 @@ def run(
     if answer_score is not None and answer_score < min_answer_score:
         failures.append(f"answer quality {answer_score:.3f} < {min_answer_score:.3f}")
 
+    if history_path is not None:
+        from datetime import UTC, datetime
+
+        _append_history(
+            history_path,
+            {
+                "timestamp": datetime.now(tz=UTC).isoformat(),
+                "dataset": golden_path.name,
+                "dataset_version": data.get("version"),
+                "top_k": top_k,
+                "hit_rate": round(hit_rate, 4),
+                "mrr": round(mrr, 4),
+                "abstain_accuracy": round(abstain_acc, 4),
+                "answer_score": round(answer_score, 4) if answer_score is not None else None,
+                "passed": not failures,
+            },
+        )
+        print(f"  (appended metrics to {history_path})")
+
     if failures:
         print("FAIL: " + "; ".join(failures))
         return 1
@@ -202,6 +229,12 @@ def main() -> None:
     parser.add_argument("--min-mrr", type=float, default=0.7)
     parser.add_argument("--min-abstain-accuracy", type=float, default=0.75)
     parser.add_argument("--min-answer-score", type=float, default=0.6)
+    parser.add_argument(
+        "--history",
+        type=Path,
+        default=None,
+        help="Append this run's metrics as a JSON line here (track quality over time)",
+    )
     args = parser.parse_args()
 
     sys.exit(
@@ -212,6 +245,7 @@ def main() -> None:
             args.min_mrr,
             args.min_abstain_accuracy,
             args.min_answer_score,
+            history_path=args.history,
         )
     )
 

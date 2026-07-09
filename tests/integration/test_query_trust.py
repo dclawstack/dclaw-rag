@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from app.api.dependencies import get_llm, get_searcher
@@ -97,6 +97,43 @@ async def test_self_correcting_retrieval_rescues_weak_query(client):
     body = resp.json()
     assert body["abstained"] is False
     assert "5M" in body["answer"]
+
+
+def _chunk_src(source: str, score: float, age_days: int) -> DocumentChunk:
+    return DocumentChunk(
+        id=uuid4(),
+        text=f"Content from {source}.",
+        score=score,
+        metadata=ChunkMetadata(
+            doc_id=uuid4(),
+            chunk_index=0,
+            source=source,
+            created_at=datetime.now(tz=UTC) - timedelta(days=age_days),
+        ),
+    )
+
+
+async def test_trust_signals_stale_sources_and_contradictions(client, monkeypatch):
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "stale_after_days", 365)
+    monkeypatch.setattr(settings, "flag_contradictions", True)
+    # Two distinct sources (so contradiction detection runs); one is stale.
+    chunks = [_chunk_src("old.pdf", 5.0, age_days=400), _chunk_src("new.pdf", 5.0, age_days=10)]
+    app.dependency_overrides[get_searcher] = lambda: _Searcher(chunks)
+    app.dependency_overrides[get_llm] = lambda: _ScriptedLLM(
+        [
+            ANSWER,
+            '{"faithfulness": "grounded", "unsupported_claims": []}',
+            '{"contradictions": ["[1] and [2] report different figures"]}',
+        ]
+    )
+
+    resp = await client.post(QUERY_PATH, json={"question": "x", "top_k": 5})
+
+    body = resp.json()
+    assert body["stale_sources"] == ["old.pdf"]
+    assert body["contradictions"] == ["[1] and [2] report different figures"]
 
 
 async def test_grounded_answer_is_verified(client):

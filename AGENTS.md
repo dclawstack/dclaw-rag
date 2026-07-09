@@ -41,6 +41,12 @@ questions and get cited, LLM-synthesized answers.
   the `/query` route runs `search_self_correcting`, which reformulates the query once with
   the LLM and re-searches when the top rerank score is below `self_correct_threshold`,
   keeping the retry only if it's stronger. One extra LLM call at most, on weak queries.
+- **Trust signals on `/query`** (E4): the response carries `reformulated_query` (when
+  self-correction rewrote the query), `stale_sources` (sources older than
+  `STALE_AFTER_DAYS`; `app/retrieval/freshness.py`), and `contradictions` (cross-source
+  conflicts flagged by a best-effort LLM check, `app/generation/contradiction.py`, only
+  when ≥2 distinct sources and `FLAG_CONTRADICTIONS`). The query page surfaces these in a
+  "Why this answer" panel and marks which retrieved chunks were cited.
 - **Qdrant** uses **named vectors**: `dense` (dimension follows `embedding_model` —
   1024 for bge-large, 384 for local-mode bge-small; fixed at collection creation) +
   `sparse`. See `app/db/qdrant_store.py`. Always get the client via
@@ -219,7 +225,10 @@ secrets/CORS/LLM-provider keys are missing (`validate_runtime_config`).
   demand, and on retrieval-touching PRs: it ingests `eval/golden_set.json` into a throwaway
   Qdrant collection and gates on hit-rate / MRR / abstention accuracy (no LLM needed). It also
   does **LLM-graded answer quality** — but only when a provider key is configured (the secret
-  is passed in CI); without one it's skipped, not failed.
+  is passed in CI); without one it's skipped, not failed. A **versioned adversarial/regression
+  set** lives at `eval/adversarial_set.json` (distractors, abstention traps, an in-doc prompt
+  injection); `scripts/evaluate.py --history <file>` appends each run's metrics as JSONL to
+  track answer quality over time.
 
 ## Running Locally
 - **Python deps:** install CPU-only torch first, then the package — the app runs on CPU,
