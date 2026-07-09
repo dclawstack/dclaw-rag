@@ -138,8 +138,15 @@ questions and get cited, LLM-synthesized answers.
   window. Dev: `npm run build:ui && npm start` (see `desktop/README.md` — including the
   Ubuntu chrome-sandbox SUID step). Packaged: `npm run dist` → AppImage/deb; first launch
   bootstraps a private Python runtime under `~/.dclaw-rag/runtime` via bundled `uv`.
-- LLM choice for packaged installs lives in `~/.dclaw-rag/desktop.env` (first-run chooser
-  writes it); dev mode uses the repo `.env`.
+- LLM choice for packaged installs lives in `~/.dclaw-rag/desktop.env`. First run is
+  **zero-config** (`settings.ensureDefaultLocalLLM`): with nothing set it defaults to the
+  bundled local model so install→ask needs no setup; edit the file for OpenRouter/Ollama.
+  Dev mode uses the repo `.env`.
+- **Packaging** (`desktop/DISTRIBUTION.md`): electron-builder Linux/mac/win targets, shared
+  icon `build/icon.png`, mac hardened-runtime entitlements, **auto-update** via
+  electron-updater ← GitHub Releases (`update.js`). Signed mac/win builds need certs +
+  per-OS runners; the `desktop-build.yml` matrix is manual-dispatch. `backend.js` is
+  Windows-path-aware (Scripts/`.exe`).
 - `npm run self-test` is the e2e: ingest → voice-record (stubbed mic) → transcribe →
   cited answer, asserted from live DOM. It needs a display + models + an LLM, so it is a
   dev-machine tool, not a CI job. `desktop/README.md` lists hard-won Electron gotchas —

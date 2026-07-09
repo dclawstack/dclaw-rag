@@ -1,0 +1,71 @@
+name: desktop-build
+
+# Manual only — each build downloads ~2 GB (torch + Python runtime), so it never
+# runs unattended. Add signing secrets (see desktop/DISTRIBUTION.md) for signed
+# artifacts; without them the installers are unsigned.
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to a GitHub Release (requires a matching tag + signing)"
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install desktop deps
+        run: npm install
+
+      - name: Build (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: npm run dist
+
+      - name: Build (macOS)
+        if: matrix.os == 'macos-latest'
+        env:
+          # Signing/notarization — set these as repo secrets to get signed builds.
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run dist:mac ${{ inputs.publish && '-- --publish always' || '' }}
+
+      - name: Build (Windows)
+        if: matrix.os == 'windows-latest'
+        env:
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run dist:win ${{ inputs.publish && '-- --publish always' || '' }}
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: dclaw-rag-${{ matrix.os }}
+          path: |
+            desktop/dist/*.AppImage
+            desktop/dist/*.deb
+            desktop/dist/*.dmg
+            desktop/dist/*.zip
+            desktop/dist/*.exe
+          if-no-files-found: ignore
