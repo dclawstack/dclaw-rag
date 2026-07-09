@@ -14,6 +14,7 @@ from app.api.dependencies import (
 from app.core import metrics
 from app.core.config import settings
 from app.db.query_cache import QueryCache
+from app.generation.contradiction import detect_contradictions
 from app.generation.llm_gateway import LLMGateway
 from app.generation.synthesis import (
     build_citations,
@@ -23,6 +24,7 @@ from app.generation.synthesis import (
     verify_answer,
 )
 from app.models.schemas import QueryRequest, QueryResponse
+from app.retrieval.freshness import stale_sources
 from app.retrieval.search import Searcher
 from app.retrieval.self_correct import search_self_correcting
 
@@ -96,6 +98,7 @@ async def query(
             citations=[],
             confidence="low",
             abstained=True,
+            reformulated_query=reformulated,
             latency_ms=_elapsed_ms(start),
         )
         cache.set(tenant, cache_params, response.model_dump(mode="json"))
@@ -114,6 +117,13 @@ async def query(
     unsupported_claims: list[str] = []
     if settings.verify_answers and request.verify:
         faithfulness, unsupported_claims = await verify_answer(answer, chunks, llm)
+
+    # Trust signals (E4): stale sources (deterministic) + cross-source
+    # contradictions (best-effort LLM check, only when it can matter).
+    stale = stale_sources(chunks)
+    contradictions: list[str] = []
+    if settings.flag_contradictions:
+        contradictions = await detect_contradictions(chunks, llm)
 
     metrics.QUERIES.labels(abstained="false").inc()
     logger.info(
@@ -138,6 +148,9 @@ async def query(
         abstained=False,
         faithfulness=faithfulness,
         unsupported_claims=unsupported_claims,
+        reformulated_query=reformulated,
+        stale_sources=stale,
+        contradictions=contradictions,
         latency_ms=_elapsed_ms(start),
     )
     cache.set(tenant, cache_params, response.model_dump(mode="json"))

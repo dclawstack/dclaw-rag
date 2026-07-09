@@ -21,7 +21,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Send, Quote, BookOpen, ChevronRight, Sparkles, ListTree, Mic, Square } from "lucide-react";
+import { Send, Quote, BookOpen, ChevronRight, Sparkles, ListTree, Mic, Square, Info, AlertTriangle, Clock, Wand2 } from "lucide-react";
 import { GroundingBadge } from "@/components/grounding-badge";
 
 export default function QueryPage() {
@@ -280,6 +280,60 @@ export default function QueryPage() {
             </CardContent>
           </Card>
 
+          {(() => {
+            const q = result as QueryResponse;
+            const reformulated = q.reformulated_query;
+            const contradictions = q.contradictions ?? [];
+            const stale = q.stale_sources ?? [];
+            if (!reformulated && contradictions.length === 0 && stale.length === 0) return null;
+            return (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Info className="w-4 h-4 text-primary" />
+                    Why this answer
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  {reformulated && (
+                    <div className="flex items-start gap-2 text-muted-foreground">
+                      <Wand2 className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
+                      <span>
+                        Your query retrieved weak matches, so it was rephrased to{" "}
+                        <span className="font-medium text-foreground">
+                          &ldquo;{reformulated}&rdquo;
+                        </span>{" "}
+                        to find better sources.
+                      </span>
+                    </div>
+                  )}
+                  {contradictions.length > 0 && (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+                      <p className="mb-1 flex items-center gap-1.5 font-medium text-amber-800">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        Your sources disagree
+                      </p>
+                      <ul className="list-disc space-y-1 pl-4 text-xs text-amber-700">
+                        {contradictions.map((c, i) => (
+                          <li key={i}>{c}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {stale.length > 0 && (
+                    <div className="flex items-start gap-2 text-amber-700">
+                      <Clock className="w-4 h-4 mt-0.5 shrink-0" />
+                      <span>
+                        Some sources may be out of date:{" "}
+                        <span className="font-medium">{stale.join(", ")}</span>
+                      </span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
           {steps.length > 0 && (
             <Card>
               <CardHeader className="pb-3">
@@ -349,7 +403,9 @@ export default function QueryPage() {
             <TabsContent value="sources" className="mt-3">
               <ScrollArea className="h-[500px]">
                 <div className="space-y-3 pr-4">
-                  {result.retrieved_chunks.map((chunk, idx) => (
+                  {(() => {
+                    const citedChunkIds = new Set(result.citations.map((c) => c.chunk_id));
+                    return result.retrieved_chunks.map((chunk, idx) => (
                     <Card key={chunk.id}>
                       <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
@@ -359,6 +415,11 @@ export default function QueryPage() {
                             <Badge variant="secondary" className="text-xs">
                               Score: {chunk.score.toFixed(3)}
                             </Badge>
+                            {citedChunkIds.has(chunk.chunk_id) && (
+                              <Badge className="text-xs" title="This source backs the answer">
+                                Cited
+                              </Badge>
+                            )}
                           </CardTitle>
                           <span className="text-xs text-muted-foreground font-mono truncate max-w-[200px]">
                             {chunk.id}
@@ -374,7 +435,8 @@ export default function QueryPage() {
                         <p className="text-sm leading-relaxed">{chunk.text}</p>
                       </CardContent>
                     </Card>
-                  ))}
+                    ));
+                  })()}
                 </div>
               </ScrollArea>
             </TabsContent>

@@ -91,6 +91,10 @@ class QueryResponse(BaseModel):
     abstained: bool = False
     faithfulness: str | None = None  # "grounded" | "partial" | "unsupported" | None
     unsupported_claims: list[str] = Field(default_factory=list)
+    # Observability / trust (E4).
+    reformulated_query: str | None = None  # set when self-correcting retrieval rewrote the query
+    stale_sources: list[str] = Field(default_factory=list)  # sources older than stale_after_days
+    contradictions: list[str] = Field(default_factory=list)  # conflicts found across the sources
     latency_ms: float
 
 

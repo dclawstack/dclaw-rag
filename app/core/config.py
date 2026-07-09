@@ -119,6 +119,13 @@ class Settings(BaseSettings):
     ocr_scanned_pdfs: bool = True
     ocr_min_chars: int = 100  # below this many extracted chars a PDF is treated as scanned
 
+    # Trust & observability (E4).
+    # Flag retrieved chunks whose document is older than this many days (0 = off).
+    stale_after_days: int = 365
+    # LLM-check the retrieved sources for contradictions (one extra call, only
+    # when >= 2 distinct sources are retrieved on the answer path).
+    flag_contradictions: bool = True
+
     # LLM pricing for usage/cost metering (USD per 1K tokens). Defaults are
     # Sonnet-tier; set these to match your configured model/provider.
     llm_price_per_1k_input_usd: float = 0.003
